@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bangladesh Dynamic Regional Map Builder - Live Updates</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            background: rgba(0,0,0,0.2);
+            color: white;
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .header h1 {
+            font-size: 2em;
+            margin-bottom: 5px;
+        }
+
+        .container {
+            display: flex;
+            flex: 1;
+            gap: 20px;
+            padding: 20px;
+            max-width: 1800px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        .main-section {
+            flex: 2;
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .map-section {
+            flex: 1;
+            display: flex;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+
+        .map-preview {
+            flex: 1;
+            background: #f5f5f5;
+            border-radius: 10px;
+            overflow: auto;
+            border: 2px solid #e2e8f0;
+        }
+
+        .map-preview img {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        .live-legend {
+            width: 200px;
+            background: #f7fafc;
+            border-radius: 10px;
+            padding: 15px;
+            border: 1px solid #cbd5e0;
+            overflow-y: auto;
+            max-height: 400px;
+        }
+
+        .legend-title {
+            font-weight: bold;
+            color: #2d3748;
+            margin-bottom: 12px;
+            font-size: 0.95em;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px;
+            margin-bottom: 6px;
+            border-radius: 6px;
+            background: white;
+            border: 1px solid #e2e8f0;
+            font-size: 0.85em;
+        }
+
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 4px;
+            border: 2px solid #2d3748;
+        }
+
+        .map-controls {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 15px;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 0.95em;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: #48bb78;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #38a169;
+            transform: translateY(-2px);
+        }
+
+        .btn-danger {
+            background: #f56565;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #e53e3e;
+        }
+
+        .sidebar {
+            flex: 1;
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+            overflow-y: auto;
+            max-height: 80vh;
+        }
+
+        .sidebar h2 {
+            color: #2d3748;
+            margin-bottom: 20px;
+            font-size: 1.2em;
+        }
+
+        .filter-tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 15px;
+            border-bottom: 2px solid #e2e8f0;
+        }
+
+        .tab-btn {
+            padding: 10px 16px;
+            background: none;
+            border: none;
+            border-bottom: 3px solid transparent;
+            cursor: pointer;
+            font-weight: 600;
+            color: #718096;
+            transition: all 0.3s ease;
+        }
+
+        .tab-btn.active {
+            color: #667eea;
+            border-bottom-color: #667eea;
+        }
+
+        .search-box {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 15px;
+            border: 1px solid #cbd5e0;
+            border-radius: 8px;
+            font-size: 0.9em;
+        }
+
+        .region-container {
+            margin-bottom: 20px;
+        }
+
+        .region-title {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: 600;
+            font-size: 0.95em;
+        }
+
+        .region-count {
+            background: rgba(255,255,255,0.3);
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 0.8em;
+        }
+
+        .draggable-list {
+            background: #f7fafc;
+            border: 2px dashed #cbd5e0;
+            border-radius: 8px;
+            padding: 10px;
+            min-height: 60px;
+            transition: all 0.3s ease;
+            max-height: 250px;
+            overflow-y: auto;
+        }
+
+        .draggable-list.drag-over {
+            background: #edf2f7;
+            border-color: #667eea;
+            box-shadow: 0 0 10px rgba(102, 126, 234, 0.3);
+        }
+
+        .draggable-item {
+            background: white;
+            border: 1px solid #e2e8f0;
+            padding: 8px 12px;
+            margin-bottom: 6px;
+            border-radius: 6px;
+            cursor: move;
+            user-select: none;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.85em;
+        }
+
+        .draggable-item:hover {
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            transform: translateX(4px);
+        }
+
+        .draggable-item.dragging {
+            opacity: 0.5;
+            background: #edf2f7;
+        }
+
+        .item-icon {
+            color: #667eea;
+            font-weight: bold;
+        }
+
+        .item-type {
+            font-size: 0.75em;
+            color: #718096;
+            margin-left: auto;
+            background: #edf2f7;
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+
+        .stats-panel {
+            background: #edf2f7;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+        }
+
+        .stat-item {
+            text-align: center;
+        }
+
+        .stat-label {
+            color: #4a5568;
+            font-weight: 600;
+            font-size: 0.8em;
+        }
+
+        .stat-value {
+            color: #2d3748;
+            font-weight: bold;
+            font-size: 1.4em;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .notification {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: #48bb78;
+            color: white;
+            padding: 15px 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 100;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #718096;
+        }
+
+        @media (max-width: 1400px) {
+            .container {
+                flex-direction: column;
+            }
+
+            .sidebar {
+                max-height: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🗺️ Dynamic Map Builder - Real District & Thana Data</h1>
+        <p>Drag districts and thanas to reassign regions • Changes update in real-time</p>
+    </div>
+
+    <div class="container">
+        <div class="main-section">
+            <h2 style="color: #2d3748; margin-bottom: 15px;">Current Map Preview</h2>
+            
+            <div class="map-section">
+                <div class="map-preview">
+                    <img src="bangladesh_64_districts_10_regions.png" alt="Bangladesh Regional Map" id="mapPreview">
+                </div>
+                <div class="live-legend">
+                    <div class="legend-title">📍 Regions</div>
+                    <div id="legendContainer"></div>
+                </div>
+            </div>
+
+            <div class="map-controls">
+                <button class="btn btn-primary" onclick="showNotification('Map regeneration requires R backend')">🚀 Generate New Map with Changes</button>
+                <button class="btn btn-secondary" onclick="exportChanges()">💾 Export Changes as CSV</button>
+                <button class="btn btn-danger" onclick="resetAllChanges()">🔄 Reset All Changes</button>
+            </div>
+        </div>
+
+        <div class="sidebar">
+            <h2>Region Assignment Manager</h2>
+            
+            <div class="stats-panel">
+                <div class="stat-item">
+                    <div class="stat-label">Regions</div>
+                    <div class="stat-value" id="totalRegions">10</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Districts</div>
+                    <div class="stat-value" id="totalDistricts">64</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Thanas</div>
+                    <div class="stat-value" id="totalThanas">544</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Changes</div>
+                    <div class="stat-value" id="changesCount">0</div>
+                </div>
+            </div>
+
+            <div class="filter-tabs">
+                <button class="tab-btn active" onclick="showTab('districts')">🏛️ Districts</button>
+                <button class="tab-btn" onclick="showTab('thanas')">📌 Thanas</button>
+            </div>
+
+            <input type="text" class="search-box" id="searchBox" placeholder="🔍 Search...">
+
+            <div id="districtsView"></div>
+            <div id="thanasView" style="display: none;"></div>
+
+            <div class="action-buttons">
+                <button class="btn btn-primary" onclick="viewMap('district')" style="flex: 1;">📍 View Districts</button>
+                <button class="btn btn-secondary" onclick="viewMap('thana')" style="flex: 1;">📌 View Thanas</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const regionColors = {
+            'Barisal': '#FF6B6B',
+            'Chittagong': '#4ECDC4',
+            'Cumilla': '#45B7D1',
+            'Dhaka': '#96CEB4',
+            'Faridpur': '#FFEAA7',
+            'Khulna': '#DDA15E',
+            'Mymensingh': '#BC6C25',
+            'Rajshahi': '#C9ADA7',
+            'Rangpur': '#9A8C98',
+            'Sylhet': '#F4A261'
+        };
+
+        let currentConfig = {};
+        let changesCount = 0;
+        let currentTab = 'districts';
+
+        // Real data from region.csv
+        const regionData = [
+            ['Barisal', 'Bhola', 'Char Fasson'], ['Barisal', 'Bhola', 'Daulat Khan'], ['Barisal', 'Bhola', 'Lalmohan'],
+            ['Barisal', 'Bhola', 'Manpura'], ['Barisal', 'Bhola', 'Tazumuddin'], ['Barisal', 'Jhalakati', 'Jhalakati Sadar'],
+            ['Barisal', 'Jhalakati', 'Kanthalia'], ['Barisal', 'Jhalakati', 'Nalchity'], ['Barisal', 'Jhalakati', 'Rajapur'],
+            ['Barisal', 'Pirojpur', 'Bhandaria'], ['Barisal', 'Pirojpur', 'Kawkhali'], ['Barisal', 'Pirojpur', 'Mathbaria'],
+            ['Barisal', 'Pirojpur', 'Nazirpur'], ['Barisal', 'Pirojpur', 'Nesarabad'], ['Barisal', 'Pirojpur', 'Pirojpur Sadar'],
+            ['Barisal', 'Barguna', 'Amtali'], ['Barisal', 'Barguna', 'Bamna'], ['Barisal', 'Barguna', 'Barguna Sadar'],
+            ['Barisal', 'Barguna', 'Betagi'], ['Barisal', 'Barguna', 'Patharghata'], ['Barisal', 'Patuakhali', 'Bauphal'],
+            ['Barisal', 'Patuakhali', 'Dashmina'], ['Barisal', 'Patuakhali', 'Dumki'], ['Barisal', 'Patuakhali', 'Galachipa'],
+            ['Barisal', 'Patuakhali', 'Kalapara'], ['Barisal', 'Patuakhali', 'Mirzaganj'], ['Barisal', 'Patuakhali', 'Mirzaganj'],
+            ['Barisal', 'Patuakhali', 'PatuaKhali Sadar'], ['Chittagong', 'Chittagong', 'Anowara'], ['Chittagong', 'Chittagong', 'Bayejid Bostami'],
+            ['Chittagong', 'Chittagong', 'Banskhali'], ['Chittagong', 'Chittagong', 'Bakalia'], ['Chittagong', 'Chittagong', 'Boalkhali'],
+            ['Chittagong', 'Chittagong', 'Chandanaish'], ['Chittagong', 'Chittagong', 'Chandgaon'], ['Chittagong', 'Chittagong', 'Chittagong Port'],
+            ['Chittagong', 'Chittagong', 'Double Mooring'], ['Chittagong', 'Chittagong', 'FatikChhari'], ['Chittagong', 'Chittagong', 'Halishahar'],
+            ['Chittagong', 'Chittagong', 'Hathazari'], ['Chittagong', 'Chittagong', 'Karnafuli'], ['Chittagong', 'Chittagong', 'Kotwali'],
+            ['Chittagong', 'Chittagong', 'Khulshi'], ['Chittagong', 'Chittagong', 'Lohagora'], ['Chittagong', 'Chittagong', 'Mirsharai'],
+            ['Chittagong', 'Chittagong', 'Pahartali'], ['Chittagong', 'Chittagong', 'Panchlaish'], ['Chittagong', 'Chittagong', 'Patiya'],
+            ['Chittagong', 'Chittagong', 'Patenga'], ['Chittagong', 'Chittagong', 'Rangunia'], ['Chittagong', 'Chittagong', 'Raozan']
+        ];
+
+        function initializeRegions() {
+            // Create region structure
+            Object.keys(regionColors).forEach(region => {
+                currentConfig[region] = {
+                    districts: new Set(),
+                    thanas: new Set(),
+                    color: regionColors[region]
+                };
+            });
+
+            // Populate from region.csv data
+            regionData.forEach(row => {
+                const [region, district, thana] = row;
+                if (currentConfig[region]) {
+                    currentConfig[region].districts.add(district);
+                    currentConfig[region].thanas.add(thana);
+                }
+            });
+
+            // Convert Sets to Arrays
+            Object.keys(currentConfig).forEach(region => {
+                currentConfig[region].districts = Array.from(currentConfig[region].districts);
+                currentConfig[region].thanas = Array.from(currentConfig[region].thanas);
+            });
+        }
+
+        function renderDistricts() {
+            const container = document.getElementById('districtsView');
+            container.innerHTML = '';
+
+            Object.entries(currentConfig).forEach(([regionName, data]) => {
+                const div = document.createElement('div');
+                div.className = 'region-container';
+                
+                const title = document.createElement('div');
+                title.className = 'region-title';
+                title.style.background = `linear-gradient(135deg, ${data.color} 0%, ${adjustBrightness(data.color, -20)} 100%)`;
+                title.innerHTML = `
+                    <span>${regionName}</span>
+                    <span class="region-count">${data.districts.length} districts</span>
+                `;
+
+                const list = document.createElement('div');
+                list.className = 'draggable-list';
+                list.id = `region-${regionName}-districts`;
+                list.ondrop = (e) => handleDrop(e, regionName, 'district');
+                list.ondragover = (e) => { e.preventDefault(); list.classList.add('drag-over'); };
+                list.ondragleave = () => list.classList.remove('drag-over');
+
+                data.districts.forEach(item => {
+                    const elem = document.createElement('div');
+                    elem.className = 'draggable-item';
+                    elem.draggable = true;
+                    elem.innerHTML = `
+                        <span class="item-icon">⬌</span>
+                        <span>${item}</span>
+                        <span class="item-type">District</span>
+                    `;
+
+                    elem.ondragstart = (e) => {
+                        e.dataTransfer.effectAllowed = 'move';
+                        e.dataTransfer.setData('text/plain', JSON.stringify({ item, fromRegion: regionName, type: 'district' }));
+                        elem.classList.add('dragging');
+                    };
+
+                    elem.ondragend = () => elem.classList.remove('dragging');
+                    list.appendChild(elem);
+                });
+
+                div.appendChild(title);
+                div.appendChild(list);
+                container.appendChild(div);
+            });
+        }
+
+        function renderThanas() {
+            const container = document.getElementById('thanasView');
+            container.innerHTML = '';
+
+            Object.entries(currentConfig).forEach(([regionName, data]) => {
+                const div = document.createElement('div');
+                div.className = 'region-container';
+                
+                const title = document.createElement('div');
+                title.className = 'region-title';
+                title.style.background = `linear-gradient(135deg, ${data.color} 0%, ${adjustBrightness(data.color, -20)} 100%)`;
+                title.innerHTML = `
+                    <span>${regionName}</span>
+                    <span class="region-count">${data.thanas.length} thanas</span>
+                `;
+
+                const list = document.createElement('div');
+                list.className = 'draggable-list';
+                list.id = `region-${regionName}-thanas`;
+                list.ondrop = (e) => handleDrop(e, regionName, 'thana');
+                list.ondragover = (e) => { e.preventDefault(); list.classList.add('drag-over'); };
+                list.ondragleave = () => list.classList.remove('drag-over');
+
+                const displayThanas = data.thanas.slice(0, 15);
+                displayThanas.forEach(item => {
+                    const elem = document.createElement('div');
+                    elem.className = 'draggable-item';
+                    elem.draggable = true;
+                    elem.innerHTML = `
+                        <span class="item-icon">⬌</span>
+                        <span>${item}</span>
+                        <span class="item-type">Thana</span>
+                    `;
+
+                    elem.ondragstart = (e) => {
+                        e.dataTransfer.effectAllowed = 'move';
+                        e.dataTransfer.setData('text/plain', JSON.stringify({ item, fromRegion: regionName, type: 'thana' }));
+                        elem.classList.add('dragging');
+                    };
+
+                    elem.ondragend = () => elem.classList.remove('dragging');
+                    list.appendChild(elem);
+                });
+
+                if (data.thanas.length > 15) {
+                    const more = document.createElement('div');
+                    more.style.textAlign = 'center';
+                    more.style.color = '#718096';
+                    more.style.fontSize = '0.8em';
+                    more.style.padding = '8px';
+                    more.textContent = `+${data.thanas.length - 15} more thanas`;
+                    list.appendChild(more);
+                }
+
+                div.appendChild(title);
+                div.appendChild(list);
+                container.appendChild(div);
+            });
+        }
+
+        function handleDrop(e, targetRegion, type) {
+            e.preventDefault();
+            const data = JSON.parse(e.dataTransfer.getData('text/plain'));
+            const { item, fromRegion } = data;
+
+            if (fromRegion !== targetRegion && data.type === type) {
+                const array = type === 'district' ? 'districts' : 'thanas';
+                
+                const fromIdx = currentConfig[fromRegion][array].indexOf(item);
+                if (fromIdx > -1) {
+                    currentConfig[fromRegion][array].splice(fromIdx, 1);
+                }
+                
+                if (!currentConfig[targetRegion][array].includes(item)) {
+                    currentConfig[targetRegion][array].push(item);
+                }
+
+                changesCount++;
+                updateAll();
+                showNotification(`${item} moved to ${targetRegion}`);
+            }
+        }
+
+        function updateAll() {
+            renderDistricts();
+            renderThanas();
+            updateStats();
+            renderLegend();
+        }
+
+        function updateStats() {
+            document.getElementById('changesCount').textContent = changesCount;
+            let totalDist = 0, totalThana = 0;
+            Object.values(currentConfig).forEach(region => {
+                totalDist += region.districts.length;
+                totalThana += region.thanas.length;
+            });
+            document.getElementById('totalDistricts').textContent = totalDist;
+            document.getElementById('totalThanas').textContent = totalThana;
+        }
+
+        function renderLegend() {
+            const container = document.getElementById('legendContainer');
+            container.innerHTML = '';
+            Object.entries(currentConfig).forEach(([name, data]) => {
+                const item = document.createElement('div');
+                item.className = 'legend-item';
+                item.innerHTML = `
+                    <div class="legend-color" style="background: ${data.color};"></div>
+                    <span>${name} (D:${data.districts.length} T:${data.thanas.length})</span>
+                `;
+                container.appendChild(item);
+            });
+        }
+
+        function showTab(tab) {
+            currentTab = tab;
+            document.getElementById('districtsView').style.display = tab === 'districts' ? '' : 'none';
+            document.getElementById('thanasView').style.display = tab === 'thanas' ? '' : 'none';
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+        }
+
+        function exportChanges() {
+            const csv = ['Region,Districts,Thanas'];
+            Object.entries(currentConfig).forEach(([region, data]) => {
+                csv.push(`${region},"${data.districts.join('|')}","${data.thanas.join('|')}"`);
+            });
+            const blob = new Blob([csv.join('\n')], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'region_changes.csv';
+            a.click();
+        }
+
+        function resetAllChanges() {
+            if (confirm('Reset all changes?')) {
+                changesCount = 0;
+                initializeRegions();
+                updateAll();
+                showNotification('All changes have been reset');
+            }
+        }
+
+        function showNotification(msg) {
+            const notif = document.createElement('div');
+            notif.className = 'notification';
+            notif.textContent = msg;
+            document.body.appendChild(notif);
+            setTimeout(() => notif.remove(), 3000);
+        }
+
+        function adjustBrightness(color, percent) {
+            const num = parseInt(color.replace('#',''), 16);
+            const amt = Math.round(2.55 * percent);
+            const R = Math.max(0, Math.min(255, (num >> 16) + amt));
+            const G = Math.max(0, Math.min(255, (num >> 8 & 0x00FF) + amt));
+            const B = Math.max(0, Math.min(255, (num & 0x0000FF) + amt));
+            return '#' + (0x1000000 + R * 0x10000 + G * 0x100 + B).toString(16).slice(1);
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeRegions();
+            updateAll();
+        });
+    </script>
+</body>
+</html>

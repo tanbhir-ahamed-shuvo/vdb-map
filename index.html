@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bangladesh Regional Maps - 10 Regions</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+
+        h1 {
+            text-align: center;
+            color: #2d3748;
+            margin-bottom: 10px;
+            font-size: 2.5em;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #718096;
+            margin-bottom: 40px;
+            font-size: 1.1em;
+        }
+
+        .stats {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            margin-bottom: 40px;
+            flex-wrap: wrap;
+        }
+
+        .stat-box {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px 30px;
+            border-radius: 12px;
+            text-align: center;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .stat-number {
+            font-size: 2em;
+            font-weight: bold;
+            display: block;
+        }
+
+        .stat-label {
+            font-size: 0.9em;
+            opacity: 0.9;
+        }
+
+        .map-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+            gap: 30px;
+            margin-top: 30px;
+        }
+
+        .map-card {
+            background: #f7fafc;
+            border-radius: 15px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .map-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 12px 24px rgba(0,0,0,0.15);
+        }
+
+        .map-card h2 {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            font-size: 1.3em;
+            text-align: center;
+        }
+
+        .map-image-container {
+            padding: 20px;
+            background: white;
+            cursor: pointer;
+            position: relative;
+        }
+
+        .map-image-container img {
+            width: 100%;
+            height: auto;
+            border-radius: 8px;
+            display: block;
+        }
+
+        .map-info {
+            padding: 20px;
+            background: white;
+            border-top: 1px solid #e2e8f0;
+        }
+
+        .map-info p {
+            color: #4a5568;
+            margin-bottom: 10px;
+            line-height: 1.6;
+        }
+
+        .download-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            display: inline-block;
+            text-align: center;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #5568d3;
+            transform: scale(1.05);
+        }
+
+        .btn-secondary {
+            background: #48bb78;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #38a169;
+            transform: scale(1.05);
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.9);
+            overflow: auto;
+        }
+
+        .modal-content {
+            margin: 2% auto;
+            display: block;
+            max-width: 95%;
+            max-height: 95vh;
+            border-radius: 8px;
+        }
+
+        .close {
+            position: absolute;
+            top: 30px;
+            right: 50px;
+            color: #f1f1f1;
+            font-size: 50px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+
+        .close:hover {
+            color: #bbb;
+        }
+
+        .region-list {
+            background: #edf2f7;
+            padding: 20px;
+            border-radius: 12px;
+            margin-top: 30px;
+        }
+
+        .region-list h3 {
+            color: #2d3748;
+            margin-bottom: 15px;
+        }
+
+        .regions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .region-tag {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            font-weight: 500;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 20px;
+            }
+
+            h1 {
+                font-size: 1.8em;
+            }
+
+            .map-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .close {
+                right: 20px;
+                top: 20px;
+                font-size: 40px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🗺️ Bangladesh Regional Maps</h1>
+        <p class="subtitle">Administrative divisions organized into 10 custom regions</p>
+
+        <div class="stats">
+            <div class="stat-box">
+                <span class="stat-number">10</span>
+                <span class="stat-label">Regions</span>
+            </div>
+            <div class="stat-box">
+                <span class="stat-number">64</span>
+                <span class="stat-label">Districts</span>
+            </div>
+            <div class="stat-box">
+                <span class="stat-number">544</span>
+                <span class="stat-label">Thanas/Upazilas</span>
+            </div>
+        </div>
+
+        <div class="region-list">
+            <h3>📍 The 10 Regions</h3>
+            <div class="regions">
+                <span class="region-tag">Barisal (9 districts, 39 thanas)</span>
+                <span class="region-tag">Chittagong (6 districts, 58 thanas)</span>
+                <span class="region-tag">Cumilla (7 districts, 44 thanas)</span>
+                <span class="region-tag">Dhaka (7 districts, 56 thanas)</span>
+                <span class="region-tag">Faridpur (7 districts, 35 thanas)</span>
+                <span class="region-tag">Khulna (6 districts, 46 thanas)</span>
+                <span class="region-tag">Mymensingh (6 districts, 58 thanas)</span>
+                <span class="region-tag">Rajshahi (9 districts, 69 thanas)</span>
+                <span class="region-tag">Rangpur (8 districts, 57 thanas)</span>
+                <span class="region-tag">Sylhet (5 districts, 36 thanas)</span>
+            </div>
+        </div>
+
+        <div class="map-grid">
+            <!-- Map 1: 64 Districts by Region -->
+            <div class="map-card">
+                <h2>64 Districts in 10 Regions</h2>
+                <div class="map-image-container" onclick="openModal('bangladesh_64_districts_10_regions.png')">
+                    <img src="bangladesh_64_districts_10_regions.png" alt="Bangladesh - 64 Districts">
+                </div>
+                <div class="map-info">
+                    <p><strong>Resolution:</strong> 4200 × 3000 pixels (300 DPI)</p>
+                    <p><strong>Size:</strong> 14 × 10 inches</p>
+                    <p><strong>Features:</strong> District-level map with labels and bold boundaries</p>
+                    <div class="download-buttons">
+                        <a href="bangladesh_64_districts_10_regions.png" download class="btn btn-primary">⬇️ Download PNG</a>
+                        <a href="bangladesh_64_districts_10_regions.pdf" class="btn btn-secondary">📄 Download PDF</a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Map 2: All Thanas with Labels -->
+            <div class="map-card">
+                <h2>All Thanas with Labels (High Resolution)</h2>
+                <div class="map-image-container" onclick="openModal('bangladesh_all_thanas_labeled.png')">
+                    <img src="bangladesh_all_thanas_labeled.png" alt="Bangladesh - All Thanas with Labels">
+                </div>
+                <div class="map-info">
+                    <p><strong>Resolution:</strong> 5400 × 3800 pixels (300 DPI)</p>
+                    <p><strong>Size:</strong> 18 × 12.67 inches</p>
+                    <p><strong>Features:</strong> All thanas labeled with district borders. Dhaka district has smaller labels to avoid clutter, other districts have larger readable labels.</p>
+                    <div class="download-buttons">
+                        <a href="bangladesh_all_thanas_labeled.png" download class="btn btn-primary">⬇️ Download PNG</a>
+                        <a href="bangladesh_all_thanas_labeled.pdf" class="btn btn-secondary">📄 Download PDF (42×30" @ 600 DPI)</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div style="margin-top: 40px; padding: 20px; background: #edf2f7; border-radius: 12px; text-align: center;">
+            <p style="color: #4a5568; margin-bottom: 10px;">
+                <strong>📊 Data Source:</strong> Bangladesh Package (R) with custom region classifications
+            </p>
+            <p style="color: #718096; font-size: 0.9em;">
+                Generated using R, tmap v3, sf (Simple Features), and dplyr
+            </p>
+        </div>
+    </div>
+
+    <!-- Modal for full-size image viewing -->
+    <div id="imageModal" class="modal" onclick="closeModal()">
+        <span class="close">&times;</span>
+        <img class="modal-content" id="modalImage">
+    </div>
+
+    <script>
+        function openModal(imageSrc) {
+            const modal = document.getElementById('imageModal');
+            const modalImg = document.getElementById('modalImage');
+            modal.style.display = 'block';
+            modalImg.src = imageSrc;
+        }
+
+        function closeModal() {
+            document.getElementById('imageModal').style.display = 'none';
+        }
+
+        // Close modal with ESC key
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'Escape') {
+                closeModal();
+            }
+        });
+    </script>
+</body>
+</html>

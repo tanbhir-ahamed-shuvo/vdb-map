@@ -1,0 +1,5 @@
+library(bangladesh)
+d <- get_map('district')
+matches <- grep('Brahman', d$District, value=TRUE)
+cat("Brahmanbaria district spelling in map:\n")
+print(matches)

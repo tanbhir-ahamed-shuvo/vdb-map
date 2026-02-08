@@ -1,0 +1,1291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bangladesh Dynamic Regional Map - Interactive Swap</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; }
+        .header { background: rgba(0,0,0,0.2); color: white; padding: 20px; text-align: center; }
+        .header h1 { font-size: 1.8em; margin-bottom: 5px; }
+        .container { max-width: 1800px; margin: 20px auto; }
+        .main-content { display: block; }
+        .map-section { background: white; border-radius: 15px; padding: 20px; box-shadow: 0 8px 32px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        .sidebar { display: none; }
+        .regions-grid { display: grid; grid-template-columns: repeat(10, minmax(160px, 1fr)); gap: 8px; overflow-x: auto; }
+        .map-preview { width: 100%; height: 520px; background: #f5f5f5; border-radius: 10px; margin-bottom: 12px; overflow: hidden; display: flex; align-items: center; justify-content: center; }
+        .map-preview img { width: auto; height: 460px; max-width: 100%; object-fit: contain; display: block; }
+        .controls { display: flex; gap: 10px; flex-wrap: wrap; }
+        .btn { padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; transition: all 0.3s; }
+        .btn-primary { background: #667eea; color: white; }
+        .btn-primary:hover { background: #5568d3; }
+        .btn-secondary { background: #48bb78; color: white; }
+        .btn-secondary:hover { background: #38a169; }
+        .btn-danger { background: #f56565; color: white; }
+        .btn-danger:hover { background: #e53e3e; }
+        .btn-success { background: #38a169; color: white; }
+        .btn-success:hover { background: #276749; }
+        .btn-warning { background: #ed8936; color: white; }
+        .btn-warning:hover { background: #dd6b20; }
+        h2 { color: #2d3748; margin-bottom: 20px; font-size: 1.3em; }
+        .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 20px; }
+        .stat-box { background: #edf2f7; padding: 12px; border-radius: 8px; text-align: center; }
+        .stat-value { font-weight: bold; color: #667eea; font-size: 1.5em; }
+        .stat-label { color: #718096; font-size: 0.8em; }
+        .region-block { border: 1px solid #e2e8f0; border-radius: 6px; background: white; display: flex; flex-direction: column; box-shadow: 0 1px 6px rgba(0,0,0,0.08); transition: all 0.3s; }
+        .region-block:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.12); }
+        .region-header { background: #667eea; color: white; padding: 6px 8px; font-weight: 600; cursor: pointer; display: flex; justify-content: space-between; align-items: center; border-radius: 6px 6px 0 0; font-size: 0.78em; }
+        .region-header.drag-over { background: #48bb78; box-shadow: 0 0 10px rgba(72, 187, 120, 0.5); }
+        .region-content { padding: 6px; display: none; }
+        .district-block { margin-bottom: 4px; background: #f7fafc; padding: 4px 5px; border-radius: 4px; border-left: 2px solid #667eea; cursor: move; font-size: 0.72em; }
+        .district-block.dragging { opacity: 0.5; background: #e2e8f0; }
+        .district-block.drag-over { background: #bee3f8; border-left-color: #38a169; }
+        .district-name { font-weight: 600; color: #2d3748; margin-bottom: 4px; cursor: pointer; }
+        .thana-list { display: none; flex-wrap: wrap; gap: 4px; }
+        .thana-tag { background: white; border: 1px solid #cbd5e0; padding: 2px 4px; border-radius: 3px; font-size: 0.62em; color: #4a5568; cursor: move; transition: all 0.2s; }
+        .thana-tag:hover { background: #edf2f7; border-color: #667eea; }
+        .thana-tag.dragging { opacity: 0.5; background: #e2e8f0; }
+        .notification { position: fixed; bottom: 20px; right: 20px; background: #48bb78; color: white; padding: 15px 20px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 100; animation: slideIn 0.3s ease; }
+        @keyframes slideIn { from { transform: translateX(400px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        .search-box { width: 100%; padding: 10px; margin-bottom: 15px; border: 1px solid #cbd5e0; border-radius: 8px; }
+        .count-badge { background: rgba(255,255,255,0.3); padding: 2px 6px; border-radius: 10px; font-size: 0.7em; }
+        .changes-log { background: #fffaf0; border: 1px solid #fed7d7; border-radius: 8px; padding: 12px; margin-top: 15px; max-height: 150px; overflow-y: auto; }
+        .change-item { font-size: 0.85em; color: #744210; margin-bottom: 6px; padding-bottom: 6px; border-bottom: 1px solid #fbd38d; }
+        .change-item:last-child { border-bottom: none; }
+        .action-buttons { display: flex; gap: 10px; margin-top: 15px; flex-wrap: wrap; }
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 200; }
+        .modal.active { display: flex; justify-content: center; align-items: center; }
+        .modal-content { background: white; padding: 30px; border-radius: 15px; max-width: 500px; text-align: center; }
+        .modal-content h3 { margin-bottom: 15px; color: #2d3748; }
+        .modal-content p { color: #718096; margin-bottom: 20px; }
+        .modal-buttons { display: flex; gap: 10px; justify-content: center; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🗺️ Bangladesh Regional Map - Interactive Swap Manager</h1>
+        <p>Drag & drop to swap thanas between districts or districts between regions • Changes reflected in real-time</p>
+    </div>
+
+    <div class="container">
+        <div class="main-content">
+            <div class="map-section">
+                <h2>Map Preview</h2>
+                <div id="mapStatus" style="margin-bottom:8px; color:#4a5568; font-size:0.9em;">
+                    Last update: <span id="lastUpdate">Never</span>
+                </div>
+                <div style="margin-bottom: 15px;">
+                    <h3 style="margin: 10px 0 8px 0; font-size: 0.95em; color: #2d3748;">District Map (64 Districts)</h3>
+                    <div class="map-preview">
+                        <img src="/outputs/bangladesh_districts_updated_from_swaps.png" alt="District Map" id="districtMapImg" onclick="openFullView('/outputs/bangladesh_districts_updated_from_swaps.png', 'District Map')" style="cursor:pointer;" onerror="this.onerror=null; this.src='bangladesh_64_districts_10_regions.png';">
+                    </div>
+                    <div style="display:flex; gap:8px; margin-top:8px;">
+                        <button class="btn btn-sm" style="flex:1; padding:6px; font-size:0.85em; background:#667eea; color:white; border:none; border-radius:4px; cursor:pointer;" onclick="downloadMap('/outputs/bangladesh_districts_updated_from_swaps.png', 'district-map.png')">📥 PNG</button>
+                        <button class="btn btn-sm" style="flex:1; padding:6px; font-size:0.85em; background:#667eea; color:white; border:none; border-radius:4px; cursor:pointer;" onclick="downloadMap('/outputs/bangladesh_districts_updated_from_swaps.pdf', 'district-map.pdf')">📥 PDF</button>
+                        <button class="btn btn-sm" style="flex:1; padding:6px; font-size:0.85em; background:#4a5568; color:white; border:none; border-radius:4px; cursor:pointer;" onclick="openFullView('/outputs/bangladesh_districts_updated_from_swaps.pdf', 'District Map')">🔍 Full View</button>
+                    </div>
+                </div>
+                <div style="margin-bottom: 15px;">
+                    <h3 style="margin: 10px 0 8px 0; font-size: 0.95em; color: #2d3748;">Thana Map (544 Thanas/Upazilas)</h3>
+                    <div class="map-preview">
+                        <img src="/outputs/bangladesh_thanas_updated_from_swaps.png" alt="Thana Map" id="thanaMapImg" onclick="openFullView('/outputs/bangladesh_thanas_updated_from_swaps.png', 'Thana Map')" style="cursor:pointer;" onerror="this.onerror=null; this.src='bangladesh_all_thanas_labeled.png';">
+                    </div>
+                    <div style="display:flex; gap:8px; margin-top:8px;">
+                        <button class="btn btn-sm" style="flex:1; padding:6px; font-size:0.85em; background:#48bb78; color:white; border:none; border-radius:4px; cursor:pointer;" onclick="downloadMap('/outputs/bangladesh_thanas_updated_from_swaps.png', 'thana-map.png')">📥 PNG</button>
+                        <button class="btn btn-sm" style="flex:1; padding:6px; font-size:0.85em; background:#48bb78; color:white; border:none; border-radius:4px; cursor:pointer;" onclick="downloadMap('/outputs/bangladesh_thanas_updated_from_swaps.pdf', 'thana-map.pdf')">📥 PDF</button>
+                        <button class="btn btn-sm" style="flex:1; padding:6px; font-size:0.85em; background:#4a5568; color:white; border:none; border-radius:4px; cursor:pointer;" onclick="openFullView('/outputs/bangladesh_thanas_updated_from_swaps.pdf', 'Thana Map')">🔍 Full View</button>
+                    </div>
+                </div>
+                <div class="controls">
+                    <button class="btn btn-primary" onclick="exportData()">💾 Export CSV</button>
+                    <button class="btn btn-warning" onclick="generateNewMap(false)">🔄 Generate Updated Map</button>
+                    <button class="btn btn-success" onclick="refreshMaps()">🖼️ Refresh Maps</button>
+                    <button class="btn btn-danger" onclick="resetChanges()">↩️ Reset Changes</button>
+                    <button class="btn btn-secondary" onclick="location.reload()">🔃 Refresh</button>
+                </div>
+                <div style="margin-top:10px; display:flex; align-items:center; gap:8px;">
+                    <input type="checkbox" id="autoUpdateToggle" checked>
+                    <label for="autoUpdateToggle">Auto-update maps after swap</label>
+                </div>
+            </div>
+
+            <div class="sidebar">
+                <h2>Interactive Manager</h2>
+                
+                <div class="stats">
+                    <div class="stat-box">
+                        <div class="stat-value" id="regionCount">10</div>
+                        <div class="stat-label">Regions</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-value" id="districtCount">64</div>
+                        <div class="stat-label">Districts</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-value" id="thanaCount">544</div>
+                        <div class="stat-label">Thanas</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-value" id="changedCount">0</div>
+                        <div class="stat-label">Changes</div>
+                    </div>
+                </div>
+
+                <input type="text" class="search-box" id="searchBox" placeholder="🔍 Search region/district/thana...">
+
+                <div id="regionsContainer"></div>
+
+                <div class="changes-log" id="changesLog" style="display: none;">
+                    <strong>Recent Changes:</strong>
+                    <div id="changesList"></div>
+                </div>
+
+                <div class="action-buttons">
+                    <button class="btn btn-success" style="flex:1" onclick="saveChanges()">✅ Save & Backup</button>
+                    <button class="btn btn-primary" style="flex:1" onclick="viewStats()">📊 View Stats</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Regions Grid Layout (5x2) -->
+        <div style="background: white; border-radius: 15px; padding: 20px; box-shadow: 0 8px 32px rgba(0,0,0,0.1);">
+            <h2>Regions & Districts Manager (10×1 Row)</h2>
+            <div class="regions-grid" id="regionsGridContainer"></div>
+        </div>
+    </div>
+
+    <div class="modal" id="processingModal">
+        <div class="modal-content">
+            <h3>⏳ Generating Map...</h3>
+            <p>Processing your changes and creating updated map. This may take a few moments.</p>
+            <div style="color: #667eea; font-size: 2em; animation: spin 1s linear infinite;">⏳</div>
+        </div>
+    </div>
+
+    <script>
+        const regionColors = {
+            'Barisal': '#FF6B6B',
+            'Chittagong': '#4ECDC4',
+            'Cumilla': '#45B7D1',
+            'Dhaka': '#96CEB4',
+            'Faridpur': '#FFEAA7',
+            'Khulna': '#DDA15E',
+            'Mymensingh': '#BC6C25',
+            'Rajshahi': '#C9ADA7',
+            'Rangpur': '#9A8C98',
+            'Sylhet': '#F4A261'
+        };
+
+        let regionStructure = {};
+        let originalStructure = {};
+        let changeLog = [];
+        let dragData = { type: null, region: null, district: null, thana: null };
+        let autoUpdate = true;
+        let pendingTimer = null;
+
+        let csvData = `Barisal	Bhola	Char Fasson
+Barisal	Bhola	Daulat Khan
+Barisal	Bhola	Lalmohan
+Barisal	Bhola	Manpura
+Barisal	Bhola	Tazumuddin
+Barisal	Jhalakati	Jhalakati Sadar
+Barisal	Jhalakati	Kanthalia
+Barisal	Jhalakati	Nalchity
+Barisal	Jhalakati	Rajapur
+Barisal	Pirojpur	Bhandaria
+Barisal	Pirojpur	Kawkhali
+Barisal	Pirojpur	Mathbaria
+Barisal	Pirojpur	Nazirpur
+Barisal	Pirojpur	Nesarabad
+Barisal	Pirojpur	Pirojpur Sadar
+Barisal	Barguna	Amtali
+Barisal	Barguna	Bamna
+Barisal	Barguna	Barguna Sadar
+Barisal	Barguna	Betagi
+Barisal	Barguna	Patharghata
+Barisal	Patuakhali	Bauphal
+Barisal	Patuakhali	Dashmina
+Barisal	Patuakhali	Dumki
+Barisal	Patuakhali	Galachipa
+Barisal	Patuakhali	Kalapara
+Barisal	Patuakhali	Mirzaganj
+Barisal	Patuakhali	PatuaKhali Sadar
+Barisal	Barisal	Barisal Sadar
+Barisal	Madaripur	Kalkini
+Barisal	Madaripur	Madaripur Sadar
+Barisal	Madaripur	Rajoir
+Barisal	Madaripur	ShibChar
+Barisal	Shariatpur	Bhedarganj
+Barisal	Shariatpur	Damoudya
+Barisal	Shariatpur	Gosairhat
+Barisal	Shariatpur	Naria
+Barisal	Shariatpur	Sariatpur Sadar
+Barisal	Shariatpur	Zanjira
+Chittagong	Chittagong	Anowara
+Chittagong	Chittagong	Bayejid Bostami
+Chittagong	Chittagong	Banskhali
+Chittagong	Chittagong	Bakalia
+Chittagong	Chittagong	Boalkhali
+Chittagong	Chittagong	Chandanaish
+Chittagong	Chittagong	Chandgaon
+Chittagong	Chittagong	Chittagong Port
+Chittagong	Chittagong	Double Mooring
+Chittagong	Chittagong	FatikChhari
+Chittagong	Chittagong	Halishahar
+Chittagong	Chittagong	Hathazari
+Chittagong	Chittagong	Karnafuli
+Chittagong	Chittagong	Kotwali
+Chittagong	Chittagong	Khulshi
+Chittagong	Chittagong	Lohagora
+Chittagong	Chittagong	Mirsharai
+Chittagong	Chittagong	Pahartali
+Chittagong	Chittagong	Panchlaish
+Chittagong	Chittagong	Patiya
+Chittagong	Chittagong	Patenga
+Chittagong	Chittagong	Rangunia
+Chittagong	Chittagong	Raozan
+Chittagong	Chittagong	Swandip
+Chittagong	Chittagong	Shatkania
+Chittagong	Chittagong	Sitakunda
+Chittagong	Cox's Bazar	Chakaria
+Chittagong	Cox's Bazar	Cox's Bazar Sadar
+Chittagong	Cox's Bazar	Kutubdia
+Chittagong	Cox's Bazar	Maheshkhali
+Chittagong	Cox's Bazar	Ramu
+Chittagong	Cox's Bazar	Teknaf
+Chittagong	Cox's Bazar	Ukhia
+Chittagong	Khagrachari	Dighinala
+Chittagong	Khagrachari	Khagrachhari Sadar
+Chittagong	Khagrachari	Lakshmichhari
+Chittagong	Khagrachari	Mahalchhari
+Chittagong	Khagrachari	Matiranga
+Chittagong	Khagrachari	Panchhari
+Chittagong	Khagrachari	Manikchhari
+Chittagong	Khagrachari	Ramgarh
+Chittagong	Rangamati	Baghaichhari
+Chittagong	Rangamati	Barkal
+Chittagong	Rangamati	Kawkhali
+Chittagong	Rangamati	Belaicahhari
+Chittagong	Rangamati	Langadu
+Chittagong	Rangamati	Kaptai
+Chittagong	Rangamati	Juraichhari
+Chittagong	Rangamati	Naniarchar
+Chittagong	Rangamati	Rajsthali
+Chittagong	Rangamati	Rangamati Sadar
+Chittagong	Bandarban	Alikadam
+Chittagong	Bandarban	Bandarban Sadar
+Chittagong	Bandarban	Lama
+Chittagong	Bandarban	Naikhongchhari
+Chittagong	Bandarban	Rowangchhari
+Chittagong	Bandarban	Ruma
+Chittagong	Bandarban	Thanchi
+Cumilla	Brahmanbaria	Akhaura
+Cumilla	Brahmanbaria	Banchharampur
+Cumilla	Brahmanbaria	Ashuganj
+Cumilla	Brahmanbaria	Kashba
+Cumilla	Brahmanbaria	Nabinagar
+Cumilla	Brahmanbaria	Nasirnagar
+Cumilla	Brahmanbaria	Sarail
+Cumilla	Brahmanbaria	Brahamanbaria Sadar
+Cumilla	Chandpur	Chandpur Sadar
+Cumilla	Chandpur	Faridganj
+Cumilla	Chandpur	Haimchar
+Cumilla	Chandpur	Hajiganj
+Cumilla	Chandpur	Kachua
+Cumilla	Chandpur	Matlab Dakshin
+Cumilla	Chandpur	Uttarmatlab
+Cumilla	Chandpur	Shahrasti
+Cumilla	Comilla	Borura
+Cumilla	Comilla	Brahmanpara
+Cumilla	Comilla	Burichang
+Cumilla	Comilla	Chandina
+Cumilla	Comilla	Chauddagram
+Cumilla	Comilla	Daudkandi
+Cumilla	Comilla	Debidwar
+Cumilla	Comilla	Homna
+Cumilla	Comilla	Comilla Sadar
+Cumilla	Comilla	Laksham
+Cumilla	Comilla	Meghna
+Cumilla	Comilla	Muradnagar
+Cumilla	Comilla	Nangalkot
+Cumilla	Feni	Chhagalnaiya
+Cumilla	Feni	Daganbhuiyan
+Cumilla	Feni	Feni Sadar
+Cumilla	Feni	Parshuram
+Cumilla	Feni	Sonagazi
+Cumilla	Lakshmipur	Lakshmipur sadar
+Cumilla	Lakshmipur	Raipur
+Cumilla	Lakshmipur	Ramganj
+Cumilla	Lakshmipur	Ramgati
+Cumilla	Noakhali	Begumganj
+Cumilla	Noakhali	Chatkhil
+Cumilla	Noakhali	Companiganj
+Cumilla	Noakhali	Hatiya
+Cumilla	Noakhali	Senbagh
+Cumilla	Noakhali	Noakhali Sadar
+Dhaka	Dhaka	Badda
+Dhaka	Dhaka	Bimanbandar
+Dhaka	Dhaka	Cantonment
+Dhaka	Dhaka	Demra
+Dhaka	Dhaka	Dhamrai
+Dhaka	Dhaka	Dhanmondi
+Dhaka	Dhaka	Dohar
+Dhaka	Dhaka	Gulshan
+Dhaka	Dhaka	Hazaribagh
+Dhaka	Dhaka	Kafrul
+Dhaka	Dhaka	Kamrangirchar
+Dhaka	Dhaka	Khilgaon
+Dhaka	Dhaka	Keraniganj
+Dhaka	Dhaka	Kotwali
+Dhaka	Dhaka	Lalbagh
+Dhaka	Dhaka	Mirpur
+Dhaka	Dhaka	Mohammadpur
+Dhaka	Dhaka	Motijheel
+Dhaka	Dhaka	Nawabganj
+Dhaka	Dhaka	Pallabi
+Dhaka	Dhaka	Ramna
+Dhaka	Dhaka	Sabujbagh
+Dhaka	Dhaka	Savar
+Dhaka	Dhaka	Shyampur
+Dhaka	Dhaka	Sutrapur
+Dhaka	Dhaka	Tejgaon
+Dhaka	Dhaka	Uttara
+Dhaka	Gazipur	Gazipur Sadar
+Dhaka	Gazipur	Kaliakair
+Dhaka	Gazipur	Kaliganj
+Dhaka	Gazipur	Kapasia
+Dhaka	Gazipur	Sreepur
+Dhaka	Manikganj	Daulatpur
+Dhaka	Manikganj	Ghior
+Dhaka	Manikganj	Harirampur
+Dhaka	Manikganj	Manikganj Sadar
+Dhaka	Manikganj	Saturia
+Dhaka	Manikganj	Shibalaya
+Dhaka	Manikganj	Singair
+Dhaka	Munshiganj	Gazaria
+Dhaka	Munshiganj	Lohajang
+Dhaka	Munshiganj	Munshiganj Sadar
+Dhaka	Munshiganj	Serajdi Khan
+Dhaka	Munshiganj	Sreenagar
+Dhaka	Munshiganj	Tongibari
+Dhaka	Narayanganj	Araihazar
+Dhaka	Narayanganj	Sonargaon
+Dhaka	Narayanganj	Bandar
+Dhaka	Narayanganj	Naryanganj Sadar
+Dhaka	Narayanganj	Rupganj
+Dhaka	Narsingdi	Belabo
+Dhaka	Narsingdi	Manohardi
+Dhaka	Narsingdi	Narsingdi Sadar
+Dhaka	Narsingdi	Palash
+Dhaka	Narsingdi	Raipura
+Dhaka	Narsingdi	Shibpur
+Faridpur	Faridpur	Alfadanga
+Faridpur	Faridpur	Bhanga
+Faridpur	Faridpur	Boalmari
+Faridpur	Faridpur	Char Bhadrasan
+Faridpur	Faridpur	Faridpur Sadar
+Faridpur	Faridpur	Madukhali
+Faridpur	Faridpur	Nagarkanda
+Faridpur	Faridpur	Sadarpur
+Faridpur	Rajbari	Baliakandi
+Faridpur	Rajbari	Goalandaghat
+Faridpur	Rajbari	Pangsha
+Faridpur	Rajbari	Rajbari Sadar
+Faridpur	Jhenaidah	Harinakunda
+Faridpur	Jhenaidah	Jhinaidah Sadar
+Faridpur	Jhenaidah	Kaliganj
+Faridpur	Jhenaidah	Kotchandpur
+Faridpur	Jhenaidah	Maheshpur
+Faridpur	Jhenaidah	Shailkupa
+Faridpur	Magura	Magura Sadar
+Faridpur	Magura	Mohammadpur
+Faridpur	Magura	Shalikha
+Faridpur	Magura	Sreepur
+Faridpur	Chuadanga	Alamdanga
+Faridpur	Chuadanga	Chuadanga Sadar
+Faridpur	Chuadanga	Damurhuda
+Faridpur	Chuadanga	Jibannagar
+Faridpur	Kushtia	Bheramara
+Faridpur	Kushtia	Daulatpur
+Faridpur	Kushtia	Khoksa
+Faridpur	Kushtia	Kumar Khali
+Faridpur	Kushtia	Kushtia Sadar
+Faridpur	Kushtia	Mirpur
+Faridpur	Meherpur	Gangni
+Faridpur	Meherpur	Mujibnagar
+Faridpur	Meherpur	Meherpur Sadar
+Khulna	Jessore	Abhaynagar
+Khulna	Jessore	Bagherpara
+Khulna	Jessore	Chaugachha
+Khulna	Jessore	Jhikargachha
+Khulna	Jessore	Keshabpur
+Khulna	Jessore	Jessore Sadar
+Khulna	Jessore	Manirampur
+Khulna	Jessore	Sharsha
+Khulna	Narail	Kalia
+Khulna	Narail	Lahagara
+Khulna	Narail	Narail Sadar
+Khulna	Bagerhat	Bagerhat Sadar
+Khulna	Bagerhat	Chitalmari
+Khulna	Bagerhat	Fakirhat
+Khulna	Bagerhat	Kachua
+Khulna	Bagerhat	Mollahat
+Khulna	Bagerhat	Mongla
+Khulna	Bagerhat	Morrelganj
+Khulna	Bagerhat	Rampal
+Khulna	Bagerhat	Sarankhola
+Khulna	Khulna	Batiaghata
+Khulna	Khulna	Dacope
+Khulna	Khulna	Dualatpur
+Khulna	Khulna	Dumuria
+Khulna	Khulna	Dighalia
+Khulna	Khulna	Khalishpur
+Khulna	Khulna	Khanjahan Ali
+Khulna	Khulna	Khulna Sadar
+Khulna	Khulna	Koyra
+Khulna	Khulna	Paikgachha
+Khulna	Khulna	Phultala
+Khulna	Khulna	Rupsa
+Khulna	Khulna	Sonadanga
+Khulna	Khulna	Terokhada
+Khulna	Satkhira	Assasuni
+Khulna	Satkhira	Debhata
+Khulna	Satkhira	Kalaroa
+Khulna	Satkhira	Kaliganj
+Khulna	Satkhira	Satkhira Sadar
+Khulna	Satkhira	Shyamnagar
+Khulna	Satkhira	Tala
+Khulna	Gopalganj	Gopalganj Sadar
+Khulna	Gopalganj	Kashiani
+Khulna	Gopalganj	Kotalipara
+Khulna	Gopalganj	Muksudpur
+Khulna	Gopalganj	Tungipara
+Mymensingh	Jamalpur	Bakshiganj
+Mymensingh	Jamalpur	Dewanganj
+Mymensingh	Jamalpur	Islampur
+Mymensingh	Jamalpur	Jamalpur Sadar
+Mymensingh	Jamalpur	Madarganj
+Mymensingh	Jamalpur	Melandaha
+Mymensingh	Jamalpur	Sharishabari
+Mymensingh	Sherpur	Jhenaigati
+Mymensingh	Sherpur	Nakla
+Mymensingh	Sherpur	Nalitabari
+Mymensingh	Sherpur	Sherpur Sadar
+Mymensingh	Sherpur	Sreebardi
+Mymensingh	Kishoreganj	Austagram
+Mymensingh	Kishoreganj	Bajitpur
+Mymensingh	Kishoreganj	Bhairab
+Mymensingh	Kishoreganj	Hossainpur
+Mymensingh	Kishoreganj	Itna
+Mymensingh	Kishoreganj	Karimganj
+Mymensingh	Kishoreganj	Katiadi
+Mymensingh	Kishoreganj	Kishoreganj Sadar
+Mymensingh	Kishoreganj	Kuliarchar
+Mymensingh	Kishoreganj	Mitamain
+Mymensingh	Kishoreganj	Nikli
+Mymensingh	Kishoreganj	Pakundia
+Mymensingh	Kishoreganj	Tarai
+Mymensingh	Mymensingh	Bhaluka
+Mymensingh	Mymensingh	Dhobaura
+Mymensingh	Mymensingh	Fulbari
+Mymensingh	Mymensingh	Gaffargaon
+Mymensingh	Mymensingh	Gauripur
+Mymensingh	Mymensingh	Haluaghat
+Mymensingh	Mymensingh	Iswarganj
+Mymensingh	Mymensingh	Mymensingh Sadar
+Mymensingh	Mymensingh	Muktagachha
+Mymensingh	Mymensingh	Nandail
+Mymensingh	Mymensingh	Phulpur
+Mymensingh	Mymensingh	Trishal
+Mymensingh	Netrokona	Atpara
+Mymensingh	Netrokona	Barhatta
+Mymensingh	Netrokona	Durgapur
+Mymensingh	Netrokona	Khaliajuri
+Mymensingh	Netrokona	Kalmakanda
+Mymensingh	Netrokona	Kendua
+Mymensingh	Netrokona	Madan
+Mymensingh	Netrokona	Mohanganj
+Mymensingh	Netrokona	Netrokona Sadar
+Mymensingh	Netrokona	Purbadhala
+Mymensingh	Tangail	Basail
+Mymensingh	Tangail	Bhuapur
+Mymensingh	Tangail	Delduar
+Mymensingh	Tangail	Ghatail
+Mymensingh	Tangail	Gopalpur
+Mymensingh	Tangail	Kalihati
+Mymensingh	Tangail	Madhupur
+Mymensingh	Tangail	Mirzapur
+Mymensingh	Tangail	Nagarpur
+Mymensingh	Tangail	Sakhipur
+Mymensingh	Tangail	Tangail Sadar
+Rajshahi	Bogra	Adamdighi
+Rajshahi	Bogra	Bogra Sadar
+Rajshahi	Bogra	Dhunat
+Rajshahi	Bogra	Dhupchanchia
+Rajshahi	Bogra	Gabtali
+Rajshahi	Bogra	Kahaloo
+Rajshahi	Bogra	Nandigram
+Rajshahi	Bogra	Sariakandi
+Rajshahi	Bogra	Sherpur
+Rajshahi	Bogra	Sibganj
+Rajshahi	Bogra	Sonatola
+Rajshahi	Joypurhat	Akkelpur
+Rajshahi	Joypurhat	Joupurhat Sadar
+Rajshahi	Joypurhat	Kalai
+Rajshahi	Joypurhat	Khetlal
+Rajshahi	Joypurhat	Panchbibi
+Rajshahi	Pabna	Atgharia
+Rajshahi	Pabna	Bera
+Rajshahi	Pabna	Bhangura
+Rajshahi	Pabna	Chatmohar
+Rajshahi	Pabna	Faridpur
+Rajshahi	Pabna	Iswardi
+Rajshahi	Pabna	Pabna Sadar
+Rajshahi	Pabna	Santhia
+Rajshahi	Pabna	Sujanagar
+Rajshahi	Sirajganj	Belkuchi
+Rajshahi	Sirajganj	Chauhali
+Rajshahi	Sirajganj	Kamarkhanda
+Rajshahi	Sirajganj	Kazipur
+Rajshahi	Sirajganj	Rayganj
+Rajshahi	Sirajganj	Shahjadpur
+Rajshahi	Sirajganj	Sirajganj Sadar
+Rajshahi	Sirajganj	Tarash
+Rajshahi	Sirajganj	Ullapara
+Rajshahi	Naogaon	Atari
+Rajshahi	Naogaon	Badalgachhi
+Rajshahi	Naogaon	Dhamoirhat
+Rajshahi	Naogaon	Manda
+Rajshahi	Naogaon	Mahadebpur
+Rajshahi	Naogaon	Naogaon Sadar
+Rajshahi	Naogaon	Niamatpur
+Rajshahi	Naogaon	Patnitala
+Rajshahi	Naogaon	Porsha
+Rajshahi	Naogaon	Raninagar
+Rajshahi	Naogaon	Sapahar
+Rajshahi	Natore	Bagati para
+Rajshahi	Natore	Baraigram
+Rajshahi	Natore	Gurudaspur
+Rajshahi	Natore	Lalpur
+Rajshahi	Natore	Natore Sadar
+Rajshahi	Natore	Singra
+Rajshahi	Chapainawabganj	Bhola hat
+Rajshahi	Chapainawabganj	Gomastapur
+Rajshahi	Chapainawabganj	Nachole
+Rajshahi	Chapainawabganj	Nawabganj Sadar
+Rajshahi	Chapainawabganj	Shib ganj
+Rajshahi	Rajshahi	Bagha
+Rajshahi	Rajshahi	Baghmara
+Rajshahi	Rajshahi	Boalia
+Rajshahi	Rajshahi	Charghat
+Rajshahi	Rajshahi	Durgapur
+Rajshahi	Rajshahi	Godagari
+Rajshahi	Rajshahi	Matihar
+Rajshahi	Rajshahi	Mohanpur
+Rajshahi	Rajshahi	Paba
+Rajshahi	Rajshahi	Puthia
+Rajshahi	Rajshahi	Rajpara
+Rajshahi	Rajshahi	Shahmakhdum
+Rajshahi	Rajshahi	Tanor
+Rangpur	Dinajpur	Birampur
+Rangpur	Dinajpur	Birganj
+Rangpur	Dinajpur	Biral
+Rangpur	Dinajpur	Bochagonj
+Rangpur	Dinajpur	Chirirbandar
+Rangpur	Dinajpur	Fulbari
+Rangpur	Dinajpur	Ghoraghat
+Rangpur	Dinajpur	Hakimpur
+Rangpur	Dinajpur	Kaharole
+Rangpur	Dinajpur	Khansama
+Rangpur	Dinajpur	Dinajpur Sadar
+Rangpur	Dinajpur	Nowabganj
+Rangpur	Dinajpur	Parbatipur
+Rangpur	Panchagarh	Atwari
+Rangpur	Panchagarh	Boda
+Rangpur	Panchagarh	Debiganj
+Rangpur	Panchagarh	Panchagarh Sadra
+Rangpur	Panchagarh	Tentulia
+Rangpur	Thakurgaon	Balladangi
+Rangpur	Thakurgaon	Haripur
+Rangpur	Thakurgaon	Pirganj
+Rangpur	Thakurgaon	Ranisankail
+Rangpur	Thakurgaon	Thakurgaonsad
+Rangpur	Gaibandha	Fulchari
+Rangpur	Gaibandha	Gaibandha Sadar
+Rangpur	Gaibandha	Gobindaganj
+Rangpur	Gaibandha	Palashbari
+Rangpur	Gaibandha	Sadullapur
+Rangpur	Gaibandha	Saghatta
+Rangpur	Gaibandha	Sundarganj
+Rangpur	Kurigram	Bhurungamari
+Rangpur	Kurigram	Charrajibpur
+Rangpur	Kurigram	Chlmari
+Rangpur	Kurigram	Phulbari
+Rangpur	Kurigram	Kurigaram Sadar
+Rangpur	Kurigram	Nageshwari
+Rangpur	Kurigram	Rajarhat
+Rangpur	Kurigram	Raumari
+Rangpur	Kurigram	Ulipur
+Rangpur	Lalmonirhat	Aditmari
+Rangpur	Lalmonirhat	Hatibandha
+Rangpur	Lalmonirhat	Kali Ganj
+Rangpur	Lalmonirhat	Lalmonirhat Sadar
+Rangpur	Lalmonirhat	Patgram
+Rangpur	Nilphamari	Dimla
+Rangpur	Nilphamari	Domar
+Rangpur	Nilphamari	Jaldhaka
+Rangpur	Nilphamari	Kishoreganj
+Rangpur	Nilphamari	Nliphamari Sadar
+Rangpur	Nilphamari	Saidpur
+Rangpur	Rangpur	Badarganj
+Rangpur	Rangpur	Gangachara
+Rangpur	Rangpur	Kaunia
+Rangpur	Rangpur	Rangpur Sadar
+Rangpur	Rangpur	Mithapukur
+Rangpur	Rangpur	Pirgachha
+Rangpur	Rangpur	Pirganj
+Rangpur	Rangpur	Taraganj
+Sylhet	Habiganj	Ajmiriganj
+Sylhet	Habiganj	Bahubal
+Sylhet	Habiganj	Baniachong
+Sylhet	Habiganj	Chunarughat
+Sylhet	Habiganj	Habiganj Sadar
+Sylhet	Habiganj	Lakhai
+Sylhet	Habiganj	Madhabpur
+Sylhet	Habiganj	Nabiganj
+Sylhet	Maulvibazar	Barlekha
+Sylhet	Maulvibazar	Kamalganj
+Sylhet	Maulvibazar	Kulaura
+Sylhet	Maulvibazar	Maulvibazar Sadar
+Sylhet	Maulvibazar	Rajnagar
+Sylhet	Maulvibazar	Sreemangal
+Sylhet	Sunamganj	Bishwambarpur
+Sylhet	Sunamganj	Chhatak
+Sylhet	Sunamganj	Derai
+Sylhet	Sunamganj	Dharmapasha
+Sylhet	Sunamganj	Dowara Bazar
+Sylhet	Sunamganj	Jagannathpur
+Sylhet	Sunamganj	Jamalganj
+Sylhet	Sunamganj	Sulla
+Sylhet	Sunamganj	Sunamganj Sadar
+Sylhet	Sunamganj	Tahirpur
+Sylhet	Sylhet	Balaganj
+Sylhet	Sylhet	Beanibazar
+Sylhet	Sylhet	Bishwanath
+Sylhet	Sylhet	Companiganj
+Sylhet	Sylhet	Fenchuganj
+Sylhet	Sylhet	Golabganj
+Sylhet	Sylhet	Gowainghat
+Sylhet	Sylhet	Jaintapur
+Sylhet	Sylhet	Kanaighat
+Sylhet	Sylhet	Sylhet Sadar
+Sylhet	Sylhet	Zakiganj`;
+
+        function parseData() {
+            Object.keys(regionColors).forEach(region => {
+                regionStructure[region] = {};
+            });
+
+            csvData.split('\n').forEach(line => {
+                if (!line.trim()) return;
+                const [region, district, thana] = line.split('\t').map(x => x.trim());
+                if (regionStructure[region]) {
+                    if (!regionStructure[region][district]) {
+                        regionStructure[region][district] = [];
+                    }
+                    if (thana && !regionStructure[region][district].includes(thana)) {
+                        regionStructure[region][district].push(thana);
+                    }
+                }
+            });
+
+            originalStructure = JSON.parse(JSON.stringify(regionStructure));
+        }
+
+        function renderRegions() {
+            // Render in sidebar for hidden container (backward compatibility)
+            const container = document.getElementById('regionsContainer');
+            container.innerHTML = '';
+
+            // Render in grid layout (single column)
+            const gridContainer = document.getElementById('regionsGridContainer');
+            if (gridContainer) {
+                gridContainer.innerHTML = '';
+
+                Object.entries(regionStructure).forEach(([regionName, districts]) => {
+                    const regionBlock = document.createElement('div');
+                    regionBlock.className = 'region-block';
+                    regionBlock.draggable = false;
+                    regionBlock.dataset.region = regionName;
+
+                    const header = document.createElement('div');
+                    header.className = 'region-header';
+                    header.style.background = regionColors[regionName];
+                    header.innerHTML = `
+                        <span>${regionName}</span>
+                        <span class="count-badge" style="font-size:0.75em;">${Object.keys(districts).length}D • ${Object.values(districts).reduce((a, b) => a + b.length, 0)}T</span>
+                    `;
+
+                    const content = document.createElement('div');
+                    content.className = 'region-content';
+
+                    header.onclick = () => {
+                        const isOpen = content.style.display === 'block';
+                        content.style.display = isOpen ? 'none' : 'block';
+                    };
+
+                    Object.entries(districts).forEach(([districtName, thanas]) => {
+                        const districtBlock = document.createElement('div');
+                        districtBlock.className = 'district-block';
+                        districtBlock.draggable = true;
+                        districtBlock.dataset.region = regionName;
+                        districtBlock.dataset.district = districtName;
+
+                        districtBlock.addEventListener('dragstart', dragStartDistrict);
+                        districtBlock.addEventListener('dragend', dragEndDistrict);
+                        districtBlock.addEventListener('dragover', dragOverDistrict);
+                        districtBlock.addEventListener('drop', dropDistrict);
+                        districtBlock.addEventListener('dragleave', dragLeaveDistrict);
+
+                        const districtNameElem = document.createElement('div');
+                        districtNameElem.className = 'district-name';
+                        districtNameElem.textContent = `${districtName}`;
+
+                        const thanaList = document.createElement('div');
+                        thanaList.className = 'thana-list';
+
+                        districtNameElem.onclick = (e) => {
+                            e.stopPropagation();
+                            const isOpen = thanaList.style.display === 'flex';
+                            thanaList.style.display = isOpen ? 'none' : 'flex';
+                        };
+
+                        thanas.forEach((thana) => {
+                            const tag = document.createElement('span');
+                            tag.className = 'thana-tag';
+                            tag.draggable = true;
+                            tag.textContent = thana;
+                            tag.dataset.thana = thana;
+                            tag.dataset.region = regionName;
+                            tag.dataset.district = districtName;
+
+                            tag.addEventListener('dragstart', (e) => {
+                                e.stopPropagation();
+                                dragStartThana.call(tag, e);
+                            });
+                            tag.addEventListener('dragend', dragEndThana);
+                            thanaList.appendChild(tag);
+                        });
+
+                        districtBlock.appendChild(districtNameElem);
+                        districtBlock.appendChild(thanaList);
+                        content.appendChild(districtBlock);
+                    });
+
+                    regionBlock.appendChild(header);
+                    regionBlock.appendChild(content);
+                    gridContainer.appendChild(regionBlock);
+                });
+            }
+        }
+
+        function dragStartDistrict(e) {
+            dragData = {
+                type: 'district',
+                region: this.dataset.region,
+                district: this.dataset.district
+            };
+            this.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
+        }
+
+        function dragEndDistrict(e) {
+            this.classList.remove('dragging');
+            document.querySelectorAll('.region-header').forEach(h => h.classList.remove('drag-over'));
+        }
+
+        function dragOverDistrict(e) {
+            e.preventDefault();
+            if (dragData.type === 'thana') {
+                this.classList.add('drag-over');
+            }
+        }
+
+        function dragLeaveDistrict(e) {
+            if (e.target.closest('.region-block')) {
+                e.target.closest('.region-block').querySelector('.region-header').classList.remove('drag-over');
+            }
+            this.classList.remove('drag-over');
+        }
+
+        function dropDistrict(e) {
+            e.preventDefault();
+            if (!dragData.type) return;
+
+            const regionHeader = this.closest('.region-block').querySelector('.region-header');
+            const targetRegion = this.closest('.region-block').dataset.region;
+            const targetDistrict = this.dataset.district;
+
+            if (dragData.type === 'district') {
+                if (dragData.region !== targetRegion) {
+                    swapDistrict(dragData.region, dragData.district, targetRegion);
+                }
+            }
+
+            if (dragData.type === 'thana') {
+                if (dragData.district !== targetDistrict || dragData.region !== targetRegion) {
+                    moveThana(dragData.region, dragData.district, targetRegion, targetDistrict, dragData.thana);
+                }
+            }
+
+            regionHeader.classList.remove('drag-over');
+            this.classList.remove('drag-over');
+        }
+
+        function dragStartThana(e) {
+            dragData = {
+                type: 'thana',
+                region: this.dataset.region,
+                district: this.dataset.district,
+                thana: this.dataset.thana
+            };
+            this.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
+        }
+
+        function dragEndThana(e) {
+            this.classList.remove('dragging');
+            document.querySelectorAll('.thana-list').forEach(l => l.style.background = '');
+        }
+
+        function swapDistrict(fromRegion, district, toRegion) {
+            if (!regionStructure[fromRegion] || !regionStructure[toRegion]) return;
+
+            const districts = regionStructure[fromRegion][district];
+            if (!districts) return;
+
+            regionStructure[toRegion][district] = JSON.parse(JSON.stringify(districts));
+            delete regionStructure[fromRegion][district];
+
+            changeLog.push(`Moved district "${district}" from ${fromRegion} → ${toRegion}`);
+            updateUI();
+            scheduleGenerate();
+        }
+
+        function moveThana(fromRegion, fromDistrict, toRegion, toDistrict, thana) {
+            if (!regionStructure[fromRegion] || !regionStructure[fromRegion][fromDistrict]) return;
+
+            const thanaList = regionStructure[fromRegion][fromDistrict];
+            const idx = thanaList.indexOf(thana);
+            if (idx === -1) return;
+
+            thanaList.splice(idx, 1);
+
+            if (!regionStructure[toRegion]) {
+                regionStructure[toRegion] = {};
+            }
+            if (!regionStructure[toRegion][toDistrict]) {
+                regionStructure[toRegion][toDistrict] = [];
+            }
+            regionStructure[toRegion][toDistrict].push(thana);
+
+            if (thanaList.length === 0) {
+                delete regionStructure[fromRegion][fromDistrict];
+            }
+
+            changeLog.push(`Moved thana \"${thana}\" from ${fromDistrict} (${fromRegion}) → ${toDistrict} (${toRegion})`);
+            updateUI();
+            scheduleGenerate();
+        }
+
+        function updateUI() {
+            renderRegions();
+            updateStats();
+            showChangesLog();
+        }
+
+        function updateStats() {
+            let totalDistricts = 0, totalThanas = 0;
+            Object.values(regionStructure).forEach(districts => {
+                totalDistricts += Object.keys(districts).length;
+                totalThanas += Object.values(districts).reduce((a, b) => a + b.length, 0);
+            });
+
+            document.getElementById('districtCount').textContent = totalDistricts;
+            document.getElementById('thanaCount').textContent = totalThanas;
+            document.getElementById('changedCount').textContent = changeLog.length;
+        }
+
+        function showChangesLog() {
+            const logDiv = document.getElementById('changesLog');
+            const listDiv = document.getElementById('changesList');
+
+            if (changeLog.length > 0) {
+                logDiv.style.display = 'block';
+                listDiv.innerHTML = changeLog.slice(-5).map(c => `<div class="change-item">✓ ${c}</div>`).join('');
+            }
+        }
+
+        function exportData() {
+            const lines = ['Region,District,Thana'];
+            Object.entries(regionStructure).forEach(([region, districts]) => {
+                Object.entries(districts).forEach(([district, thanas]) => {
+                    thanas.forEach(thana => {
+                        lines.push(`${region},${district},${thana}`);
+                    });
+                });
+            });
+
+            const csv = lines.join('\n');
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'region_swapped_data.csv';
+            a.click();
+            showNotif('Data exported successfully!');
+        }
+
+        function generateNewMap(silent) {
+            if (changeLog.length === 0 && !silent) {
+                showNotif('No changes made. Make swaps first!');
+                return;
+            }
+
+            const data = [];
+            Object.entries(regionStructure).forEach(([region, districts]) => {
+                Object.entries(districts).forEach(([district, thanas]) => {
+                    thanas.forEach(thana => {
+                        data.push({ region, district, thana });
+                    });
+                });
+            });
+
+            showModal(true);
+            fetch('/generate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            })
+            .then(r => r.json())
+            .then(result => {
+                showModal(false);
+                if (result.success) {
+                    refreshMaps();
+                    if (!silent) showNotif('✓ Updated maps generated!');
+                    // Reload CSV data from server to get any corrections applied by backend
+                    reloadCsvData();
+                } else {
+                    showNotif(`⚠ ${result.message || 'Map generation failed'}`);
+                }
+            })
+            .catch(() => {
+                showModal(false);
+                showNotif('⚠ Backend not running. Start server: python app.py');
+            });
+        }
+
+        function scheduleGenerate() {
+            if (!autoUpdate) return;
+            if (pendingTimer) clearTimeout(pendingTimer);
+            pendingTimer = setTimeout(() => generateNewMap(true), 800);
+        }
+
+        function refreshMaps() {
+            const ts = Date.now();
+            const districtImg = document.getElementById('districtMapImg');
+            const thanaImg = document.getElementById('thanaMapImg');
+
+            districtImg.src = `/outputs/bangladesh_districts_updated_from_swaps.png?ts=${ts}`;
+            thanaImg.src = `/outputs/bangladesh_thanas_updated_from_swaps.png?ts=${ts}`;
+
+            const lastUpdate = document.getElementById('lastUpdate');
+            if (lastUpdate) lastUpdate.textContent = new Date().toLocaleString();
+        }
+
+        async function reloadCsvData() {
+            try {
+                const response = await fetch('/region_swapped_data.csv');
+                if (response.ok) {
+                    const text = await response.text();
+                    // Convert CSV format to TSV format
+                    csvData = text
+                        .split('\n')
+                        .slice(1) // Skip header
+                        .filter(line => line.trim())
+                        .map(line => {
+                            const parts = line.split(',');
+                            if (parts.length >= 3) {
+                                return `${parts[0]}\t${parts[1]}\t${parts[2]}`;
+                            }
+                            return '';
+                        })
+                        .filter(line => line.trim())
+                        .join('\n');
+                    
+                    // Rebuild regionStructure from updated CSV
+                    regionStructure = {};
+                    parseData();
+                    renderRegions();
+                    updateStats();
+                    return true;
+                }
+            } catch (e) {
+                console.warn('Failed to reload CSV:', e);
+            }
+            return false;
+        }
+
+        async function resetChanges() {
+            if (confirm('Reset to current saved map data?')) {
+                try {
+                    showModal(true);
+                    const response = await fetch('/region_swapped_data.csv');
+                    if (!response.ok) throw new Error('Failed to load CSV');
+                    
+                    const csvText = await response.text();
+                    const lines = csvText.trim().split('\n');
+                    
+                    // Clear current structure
+                    regionStructure = {};
+                    
+                    // Parse CSV (skip header)
+                    for (let i = 1; i < lines.length; i++) {
+                        const line = lines[i].trim();
+                        if (!line) continue;
+                        
+                        const [region, district, thana] = line.split(',').map(s => s.trim());
+                        if (!region || !district || !thana) continue;
+                        
+                        if (!regionStructure[region]) {
+                            regionStructure[region] = {};
+                        }
+                        if (!regionStructure[region][district]) {
+                            regionStructure[region][district] = [];
+                        }
+                        regionStructure[region][district].push(thana);
+                    }
+                    
+                    // Update original structure
+                    originalStructure = JSON.parse(JSON.stringify(regionStructure));
+                    
+                    // Re-render UI
+                    renderRegions();
+                    showModal(false);
+                    showNotif('Map data reset to saved version!');
+                } catch (error) {
+                    showModal(false);
+                    alert('Error loading saved data: ' + error.message);
+                }
+            }
+        }
+
+        function saveChanges() {
+            exportData();
+            showNotif('Data saved to CSV!');
+        }
+
+        function showModal(show) {
+            document.getElementById('processingModal').classList.toggle('active', show);
+        }
+
+        function showNotif(msg) {
+            const notif = document.createElement('div');
+            notif.className = 'notification';
+            notif.textContent = msg;
+            document.body.appendChild(notif);
+            setTimeout(() => notif.remove(), 3000);
+        }
+
+        function viewStats() {
+            let stats = 'Region Statistics:\n\n';
+            Object.entries(regionStructure).forEach(([region, districts]) => {
+                const districtCount = Object.keys(districts).length;
+                const thanaCount = Object.values(districts).reduce((a, b) => a + b.length, 0);
+                stats += `${region}: ${districtCount} districts, ${thanaCount} thanas\n`;
+            });
+            alert(stats);
+        }
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            let csvLoaded = false;
+            
+            try {
+                // Load CSV from server (has all corrections applied)
+                const response = await fetch('/region_swapped_data.csv?t=' + Date.now());
+                if (response.ok) {
+                    const text = await response.text();
+                    // Only use server CSV if it has actual data
+                    if (text.trim().length > 0) {
+                        // Convert CSV format to TSV format for parseData
+                        csvData = text
+                            .split('\n')
+                            .slice(1) // Skip header
+                            .filter(line => line.trim())
+                            .map(line => {
+                                const parts = line.split(',');
+                                if (parts.length >= 3) {
+                                    return `${parts[0]}\t${parts[1]}\t${parts[2]}`;
+                                }
+                                return '';
+                            })
+                            .filter(line => line.trim())
+                            .join('\n');
+                        csvLoaded = true;
+                        console.log('✓ Loaded corrected CSV from server');
+                    }
+                }
+            } catch (e) {
+                console.warn('Failed to load CSV from server, using embedded data:', e);
+            }
+            
+            // Clear and rebuild from (corrected) CSV data
+            regionStructure = {};
+            parseData();
+            renderRegions();
+            updateStats();
+            
+            if (!csvLoaded) {
+                console.warn('⚠ Using embedded data - corrections may not show. Reload the page to fetch from server.');
+            }
+
+            const toggle = document.getElementById('autoUpdateToggle');
+            toggle.addEventListener('change', (e) => {
+                autoUpdate = e.target.checked;
+            });
+
+            // Prevent default drag behavior on region headers
+            document.addEventListener('dragover', e => e.preventDefault());
+            document.addEventListener('drop', e => e.preventDefault());
+        });
+
+        // Allow dragging districts over regions
+        document.addEventListener('dragover', (e) => {
+            if (dragData.type === 'district') {
+                const regionBlock = e.target.closest('.region-block');
+                if (regionBlock) {
+                    regionBlock.querySelector('.region-header').classList.add('drag-over');
+                }
+            }
+        });
+
+        document.addEventListener('drop', (e) => {
+            e.preventDefault();
+            
+            // Handle dropping districts on region headers
+            if (dragData.type === 'district') {
+                const regionBlock = e.target.closest('.region-block');
+                if (regionBlock) {
+                    const targetRegion = regionBlock.dataset.region;
+                    if (dragData.region !== targetRegion) {
+                        swapDistrict(dragData.region, dragData.district, targetRegion);
+                    }
+                    regionBlock.querySelector('.region-header').classList.remove('drag-over');
+                }
+            }
+            
+            document.querySelectorAll('.region-header').forEach(h => h.classList.remove('drag-over'));
+        });
+
+        // Full view modal functions
+        function openFullView(imageSrc, title) {
+            // If it's a PDF, open directly in a new tab
+            if (imageSrc.endsWith('.pdf')) {
+                window.open(imageSrc + '?t=' + new Date().getTime(), '_blank');
+                return;
+            }
+            
+            const modal = document.createElement('div');
+            modal.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0, 0, 0, 0.9);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                z-index: 10000;
+                cursor: pointer;
+            `;
+            
+            const container = document.createElement('div');
+            container.style.cssText = `
+                position: relative;
+                max-width: 90vw;
+                max-height: 90vh;
+                background: white;
+                border-radius: 8px;
+                padding: 20px;
+                box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            `;
+            
+            const titleEl = document.createElement('div');
+            titleEl.style.cssText = `
+                margin-bottom: 10px;
+                font-size: 18px;
+                font-weight: bold;
+                color: #2d3748;
+            `;
+            titleEl.textContent = title;
+            
+            const img = document.createElement('img');
+            img.src = imageSrc + '?t=' + new Date().getTime();
+            img.style.cssText = `
+                max-width: 100%;
+                max-height: calc(90vh - 80px);
+                object-fit: contain;
+            `;
+            
+            const closeBtn = document.createElement('button');
+            closeBtn.textContent = '✕';
+            closeBtn.style.cssText = `
+                position: absolute;
+                top: 10px;
+                right: 10px;
+                background: #667eea;
+                color: white;
+                border: none;
+                width: 40px;
+                height: 40px;
+                border-radius: 50%;
+                font-size: 20px;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            `;
+            closeBtn.onclick = (e) => {
+                e.stopPropagation();
+                modal.remove();
+            };
+            
+            container.appendChild(titleEl);
+            container.appendChild(img);
+            container.appendChild(closeBtn);
+            modal.appendChild(container);
+            
+            modal.onclick = (e) => {
+                if (e.target === modal) {
+                    modal.remove();
+                }
+            };
+            
+            document.body.appendChild(modal);
+        }
+
+        // Download map function
+        function downloadMap(url, filename) {
+            const link = document.createElement('a');
+            link.href = url + '?t=' + new Date().getTime();
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            showNotif('Downloading ' + filename + '...');
+        }
+    </script>
+</body>
+</html>
