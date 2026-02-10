@@ -4,11 +4,9 @@
 
 VDB MAP 2.1 is an **interactive web-based application** for managing and visualizing Bangladesh's regional, district, and thana (upazila) boundaries. Built with **Zaytoon Business Solutions**, it provides real-time map generation with drag-and-drop functionality for seamless thana management across 10 regions.
 
-## 🌐 Live Demo
+**🌐 Live Demo:** https://vdb-map.onrender.com/
 
-Access the live application: **https://vdb-map.onrender.com/**
-
-> **Note:** Free tier may sleep after inactivity. First load may take 30-60 seconds to wake up.
+*Note: Hosted on Render free tier - first load may take 30-60 seconds to wake up after inactivity.*
 
 ---
 
@@ -38,12 +36,13 @@ Access the live application: **https://vdb-map.onrender.com/**
   - Geographic neighbor validation
   - Real-time CSV updates
   - Automatic map regeneration
-  - **Reset to Original** - Restore initial map state with one click
+  - **Reset to Original** - One-click restoration to initial state with original backup
 
 - **PDF & PNG Generation**
-  - Auto-generated maps with Zaytoon logo
-  - Embedded color reference legends
-  - High-quality outputs for printing
+  - Auto-generated maps with embedded Zaytoon logo
+  - Color reference legends
+  - High-quality outputs for printing (up to 50×36" @ 600 DPI)
+  - Automatic logo application on all map updates
 
 - **PDF Viewer with Navigation**
   - Region-wise map navigation (Prev/Next buttons)
@@ -59,9 +58,12 @@ VDB_MAP2.1/
 ├── app.py                                    # Flask web server
 ├── generate_map_from_swaps.R                 # R script for map generation
 ├── region-manager-interactive.html           # Main web interface
-├── region_swapped_data.csv                   # Region/district/thana data (current state)
+├── region_swapped_data.csv                   # Current region/district/thana assignments
 ├── region_swapped_data_original.csv          # Original backup for reset functionality
-├── zaytoon-logo.png                          # Zaytoon Business Solutions logo
+├── zaytoon-logo.png                          # Logo embedded in all PDFs/PNGs
+├── add_logo_to_pdfs.py                       # Logo embedding for PDFs
+├── add_logo_to_pngs.py                       # Logo embedding for PNGs
+├── apply_logos_manually.py                   # Manual logo application utility
 ├── requirements.txt                          # Python dependencies
 ├── BGD_Upazila.shp                          # Bangladesh shapefile (thana level)
 ├── BGD_Upazila.shx, .dbf, .prj, .cpg        # Shapefile components
@@ -104,10 +106,10 @@ pip install -r requirements.txt
 ```
 
 **Dependencies:**
-- Flask 3.0.3
-- pypdf
-- pillow
-- reportlab
+- Flask 3.0.3 - Web server
+- pypdf >= 4.0.0 - PDF manipulation
+- pillow >= 10.0.0 - Image processing
+- reportlab >= 4.0.0 - PDF logo overlay
 
 ### **Step 3: Install R Packages**
 
@@ -149,7 +151,15 @@ Network access: **http://<your-ip>:5000**
 
 ### **Generate Maps**
 
-Click **"Generate Updated Map"** to create new PDFs/PNGs with current thana assignments.
+Click **"Generate Updated Map"** to create new PDFs/PNGs with current thana assignments. Maps are automatically embedded with Zaytoon logo.
+
+### **Reset to Original State**
+
+Click **"Reset to Original"** to:
+1. Restore original thana assignments from backup CSV
+2. Regenerate all maps with original state
+3. Apply logos to all outputs
+4. Refresh the web interface
 
 ### **View Region Maps**
 
@@ -228,11 +238,18 @@ Sylhet,#F4A261
 
 ### **region_swapped_data.csv**
 
-Contains 498 rows of thana assignments:
-- **Region** - 10 regions
+Current state of thana assignments:
+- **Region** - 10 administrative regions
 - **District** - 64 districts
-- **Thana** - Up to 544 thanas
-- **Spelling corrections** - Normalized names for matching
+- **Thana** - All 544 thanas with assignments
+- **Spelling corrections** - Normalized names for shapefile matching
+
+### **region_swapped_data_original.csv**
+
+Backup of original state for reset functionality:
+- Created during deployment
+- Used by `/reset` endpoint
+- Never modified during normal operation
 
 ### **District_Thana_Mapping.csv**
 
@@ -259,10 +276,13 @@ Reference file with:
 
 | File | Purpose |
 |------|---------|
-| zaytoon-logo.png | Logo embedded in all PDFs |
-| add_logo_to_pdfs.py | Adds logo to PDF maps |
-| add_logo_to_pngs.py | Adds logo to PNG maps |
-| bangladesh/ | R package with map data |
+| zaytoon-logo.png | Logo embedded in all PDFs/PNGs |
+| add_logo_to_pdfs.py | Embeds logo in PDF maps (auto-run by Flask) |
+| add_logo_to_pngs.py | Embeds logo in PNG maps (auto-run by Flask) |
+| apply_logos_manually.py | Manual logo application utility |
+| build.sh | Render.com deployment build script |
+| app_debug.log | Runtime debug logs (generated) |
+| bangladesh/ | R package with pre-loaded Bangladesh map data |
 
 ---
 
@@ -277,21 +297,42 @@ python app.py
 
 ### **Network Access**
 
-Server listens on `0.0.0.0:5000` - accessible from any device on the network:
+The Flask server binds to all network interfaces (0.0.0.0:5000), making it accessible from any device on your local network:
+
 ```
-http://<your-server-ip>:5000
+http://<your-ip-address>:5000
 ```
 
-### **Docker Deployment** (Optional)
+Find your IP:
+- **Windows:** `ipconfig` (look for IPv4 Address)
+- **Linux/Mac:** `ifconfig` or `ip addr`
+
+### **Docker Deployment**
+
+A Dockerfile is included for containerized deployment:
 
 ```bash
 docker build -t vdb-map .
 docker run -p 5000:5000 vdb-map
 ```
 
-### **Render.com Deployment** (Optional)
+### **Production Deployment (Render.com)**
 
-Push to GitHub and connect to Render for automatic deployment.
+The application is deployed at: https://vdb-map.onrender.com/
+
+**Automatic Deployment:**
+1. Push changes to GitHub repository
+2. Render automatically builds and deploys
+3. `build.sh` script handles R/Python setup
+4. Free tier - may sleep after inactivity
+
+**Build Process:**
+- Installs R 4.0+ and required packages (tmap, sf, dplyr)
+- Installs Python dependencies from requirements.txt
+- Creates outputs/ directory with proper permissions
+- Copies original CSV backup for reset functionality
+
+See [RENDER_DEPLOYMENT.md](RENDER_DEPLOYMENT.md) for detailed deployment guide.
 
 ---
 
@@ -301,6 +342,12 @@ Push to GitHub and connect to Render for automatic deployment.
 |----------|--------|---------|
 | `/` | GET | Main web interface |
 | `/generate` | POST | Regenerate maps from CSV |
+| `/reset` | POST | Reset to original state |
+| `/health` | GET | Health check endpoint |
+| `/diagnostics` | GET | System diagnostics |
+| `/debug/csv` | GET | View current CSV content |
+| `/debug/logs` | GET | View debug logs |
+| `/debug/clear` | GET | Clear debug logs |
 | `/region_swapped_data.csv` | GET | Download current CSV data |
 | `/outputs/<filename>` | GET | Access generated maps |
 | `/<path:filename>` | GET | Static files (logo, etc.) |
@@ -310,36 +357,73 @@ Push to GitHub and connect to Render for automatic deployment.
 ## 🐛 Troubleshooting
 
 ### **Maps Don't Update**
-- Ensure `generate_map_from_swaps.R` has proper permissions
-- Check R package installation: `require(tmap)`, `require(sf)`, `require(dplyr)`
+- Check `/debug/logs` endpoint for execution traces
+- Verify R package installation: `require(tmap)`, `require(sf)`, `require(dplyr)`
+- Ensure `generate_map_from_swaps.R` has execute permissions
+- Check outputs/ directory permissions (chmod 755)
 
 ### **Thana Move Fails**
-- Verify district adjacency in CSV
+- Use `/debug/csv` to verify CSV updates are saved
 - Check browser console for errors
+- Verify district adjacency in CSV data
 
 ### **PDF Won't Open**
-- Ensure PDF.js library is loaded
-- Check browser cache: Ctrl+Shift+Delete
+- Ensure PDF.js library is loaded (check browser console)
+- Clear browser cache: Ctrl+Shift+Delete
 - Try Full View button
+- Check `/outputs/` directory for generated files
 
-### **Logo Missing from PDFs**
+### **Logo Missing from PDFs/PNGs**
 - Confirm `zaytoon-logo.png` exists (8KB+)
-- Run: `python add_logo_to_pdfs.py`
+- Run manually: `python apply_logos_manually.py`
+- Check console for Unicode encoding errors on Windows
+- Verify pypdf, pillow, reportlab installed
+
+### **Debug Endpoints for Production Issues**
+- `/health` - Check if server is running
+- `/diagnostics` - System status and file checks
+- `/debug/csv` - View current CSV content
+- `/debug/logs` - See execution logs (R script, logo application)
+- `/debug/clear` - Reset logs for fresh diagnosis
+
+---
+
+## 🎨 Logo System
+
+All generated maps automatically include the Zaytoon Business Solutions logo:
+
+**Automatic Application:**
+- Triggered after every map generation
+- Embeds logo in all PDFs (lower-right corner)
+- Embeds logo in all PNGs (lower-right corner)
+- No manual intervention required
+
+**Manual Application:**
+```bash
+python apply_logos_manually.py
+```
+
+**Troubleshooting:**
+- Requires `zaytoon-logo.png` in project root
+- Dependencies: pypdf >= 4.0.0, pillow >= 10.0.0, reportlab >= 4.0.0
+- Windows users: UTF-8 encoding configured automatically
+
+For detailed documentation, see `LOGO_SYSTEM_GUIDE.md`
 
 ---
 
 ## 📈 Map Statistics
 
-**Total Coverage:**
-- **10 Regions** - Administrative divisions
-- **64 Districts** - Zila level
-- **544 Thanas** - Upazila level
-- **100% Population Mapped** - All thanas matched
+**Geographic Coverage:**
+- **10 Regions** - Administrative divisions of Bangladesh
+- **64 Districts** - Zila (district) level coverage
+- **544 Thanas** - Upazila (sub-district) level - 100% mapped and matched
 
 **Quality Metrics:**
-- **Match Rate**: 544/544 (100%)
-- **Border Accuracy**: ±10 meters (shapefile resolution)
-- **Update Speed**: <2 seconds for full map regeneration
+- **Match Rate**: 544/544 thanas (100%)
+- **Border Accuracy**: ±10 meters (limited by shapefile resolution)
+- **Map Generation Speed**: ~15-30 seconds for full regeneration (all 14 maps)
+- **Logo Application**: Automatic on all PDF/PNG outputs
 
 ---
 
@@ -366,19 +450,23 @@ For issues or questions:
 
 **v2.1** (Current)
 - ✅ 10 region-wise maps with dynamic generation
-- ✅ Zaytoon logo branding on all outputs
-- ✅ Color-coded region system
+- ✅ Automatic Zaytoon logo embedding on all PDFs/PNGs
+- ✅ Reset to original functionality with backup system
+- ✅ Color-coded region system with legend
 - ✅ PDF viewer with navigation
-- ✅ GitHub documentation
+- ✅ Debug endpoints for production troubleshooting
+- ✅ Render.com deployment with auto-build
 - ✅ Full thana management (544 thanas, 100% matched)
+- ✅ Comprehensive documentation (README, deployment guides)
 
 **v2.0**
 - Regional decomposition
 - Drag-and-drop interface
+- Interactive web UI
 
 **v1.0**
 - Basic mapping functionality
 
 ---
 
-**Last Updated:** February 9, 2026
+**Last Updated:** February 10, 2026
