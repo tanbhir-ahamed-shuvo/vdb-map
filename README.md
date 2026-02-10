@@ -4,6 +4,12 @@
 
 VDB MAP 2.1 is an **interactive web-based application** for managing and visualizing Bangladesh's regional, district, and thana (upazila) boundaries. Built with **Zaytoon Business Solutions**, it provides real-time map generation with drag-and-drop functionality for seamless thana management across 10 regions.
 
+## 🌐 Live Demo
+
+Access the live application: **https://vdb-map.onrender.com/**
+
+> **Note:** Free tier may sleep after inactivity. First load may take 30-60 seconds to wake up.
+
 ---
 
 ## ✨ Key Features
