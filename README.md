@@ -32,6 +32,7 @@ VDB MAP 2.1 is an **interactive web-based application** for managing and visuali
   - Geographic neighbor validation
   - Real-time CSV updates
   - Automatic map regeneration
+  - **Reset to Original** - Restore initial map state with one click
 
 - **PDF & PNG Generation**
   - Auto-generated maps with Zaytoon logo
@@ -52,7 +53,8 @@ VDB_MAP2.1/
 ├── app.py                                    # Flask web server
 ├── generate_map_from_swaps.R                 # R script for map generation
 ├── region-manager-interactive.html           # Main web interface
-├── region_swapped_data.csv                   # Region/district/thana data
+├── region_swapped_data.csv                   # Region/district/thana data (current state)
+├── region_swapped_data_original.csv          # Original backup for reset functionality
 ├── zaytoon-logo.png                          # Zaytoon Business Solutions logo
 ├── requirements.txt                          # Python dependencies
 ├── BGD_Upazila.shp                          # Bangladesh shapefile (thana level)

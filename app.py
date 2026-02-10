@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 from pathlib import Path
 from typing import Any, Dict, List
@@ -113,17 +114,65 @@ def generate() -> Any:
                 }
             ), 500
 
+        # Add logos to generated maps - CRITICAL for branding
+        logo_output = ""
+        logo_success = False
+        
+        try:
+            import sys
+            python_exe = sys.executable
+            
+            # Add logos to PDFs
+            pdf_script = BASE_DIR / "add_logo_to_pdfs.py"
+            pdf_result = subprocess.run(
+                [python_exe, str(pdf_script)],
+                cwd=str(BASE_DIR),
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=30,
+            )
+            logo_output += "=== PDF Logo Addition ===\n"
+            logo_output += pdf_result.stdout + "\n"
+            if pdf_result.stderr:
+                logo_output += "PDF Errors: " + pdf_result.stderr + "\n"
+            
+            # Add logos to PNGs
+            png_script = BASE_DIR / "add_logo_to_pngs.py"
+            png_result = subprocess.run(
+                [python_exe, str(png_script)],
+                cwd=str(BASE_DIR),
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=30,
+            )
+            logo_output += "\n=== PNG Logo Addition ===\n"
+            logo_output += png_result.stdout + "\n"
+            if png_result.stderr:
+                logo_output += "PNG Errors: " + png_result.stderr + "\n"
+            
+            logo_success = pdf_result.returncode == 0 and png_result.returncode == 0
+            
+        except subprocess.TimeoutExpired:
+            logo_output += "\n⚠ Logo addition timed out\n"
+        except Exception as e:
+            logo_output += f"\n⚠ Logo addition error: {str(e)}\n"
+            import traceback
+            logo_output += traceback.format_exc()
+
         return jsonify(
             {
                 "success": True,
-                "message": "Maps generated",
+                "message": "Maps generated" + (" with Zaytoon branding" if logo_success else " (logo addition may have failed)"),
                 "outputs": {
                     "district_png": "/outputs/bangladesh_districts_updated_from_swaps.png",
                     "thana_png": "/outputs/bangladesh_thanas_updated_from_swaps.png",
                     "district_pdf": "/outputs/bangladesh_districts_updated_from_swaps.pdf",
                     "thana_pdf": "/outputs/bangladesh_thanas_updated_from_swaps.pdf",
                 },
-                "stdout": result.stdout,
+                "logo_applied": logo_success,
+                "stdout": result.stdout + "\n\n" + logo_output,
                 "stderr": result.stderr,
             }
         )
@@ -141,6 +190,103 @@ def get_csv() -> Any:
     response.headers['Pragma'] = 'no-cache'
     response.headers['Expires'] = '-1'
     return response
+
+
+@app.route("/reset", methods=["POST"])
+def reset_to_original() -> Any:
+    """Reset to original map state by restoring from backup CSV."""
+    try:
+        csv_path = BASE_DIR / "region_swapped_data.csv"
+        original_csv_path = BASE_DIR / "region_swapped_data_original.csv"
+        
+        # Check if original backup exists
+        if not original_csv_path.exists():
+            return jsonify({
+                "success": False,
+                "message": "Original backup file not found. Please create region_swapped_data_original.csv"
+            }), 404
+        
+        # Copy original to current
+        shutil.copy2(original_csv_path, csv_path)
+        
+        # Regenerate maps from original data
+        cmd = ["Rscript", "generate_map_from_swaps.R"]
+        result = subprocess.run(
+            cmd,
+            cwd=str(BASE_DIR),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        
+        district_png = OUTPUT_DIR / "bangladesh_districts_updated_from_swaps.png"
+        thana_png = OUTPUT_DIR / "bangladesh_thanas_updated_from_swaps.png"
+        outputs_exist = district_png.exists() and thana_png.exists()
+        
+        if result.returncode != 0 and not outputs_exist:
+            return jsonify({
+                "success": False,
+                "message": "Reset successful but map regeneration failed",
+                "stdout": result.stdout,
+                "stderr": result.stderr,
+            }), 500
+        
+        # Clean up any _with_logo duplicate files
+        cleanup_output = ""
+        try:
+            for pattern in ["*_with_logo.pdf", "*_with_logo.png", "*_temp_logo.pdf", "*_temp_logo.png"]:
+                for file in OUTPUT_DIR.glob(pattern):
+                    file.unlink()
+                    cleanup_output += f"Removed {file.name}\n"
+        except Exception as e:
+            cleanup_output += f"Cleanup warning: {str(e)}\n"
+        
+        # Add logos to reset maps
+        logo_output = ""
+        logo_success = False
+        try:
+            import sys
+            python_exe = sys.executable
+            
+            pdf_script = BASE_DIR / "add_logo_to_pdfs.py"
+            pdf_result = subprocess.run(
+                [python_exe, str(pdf_script)],
+                cwd=str(BASE_DIR),
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=30,
+            )
+            logo_output += pdf_result.stdout
+            
+            png_script = BASE_DIR / "add_logo_to_pngs.py"
+            png_result = subprocess.run(
+                [python_exe, str(png_script)],
+                cwd=str(BASE_DIR),
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=30,
+            )
+            logo_output += "\n" + png_result.stdout
+            
+            logo_success = pdf_result.returncode == 0 and png_result.returncode == 0
+            
+        except Exception as e:
+            logo_output += f"Logo warning: {str(e)}\n"
+        
+        return jsonify({
+            "success": True,
+            "message": "Maps reset to original state" + (" with branding" if logo_success else " (check logo status)"),
+            "outputs": {
+                "district_png": "/outputs/bangladesh_districts_updated_from_swaps.png",
+                "thana_png": "/outputs/bangladesh_thanas_updated_from_swaps.png",
+            },
+            "logo_applied": logo_success,
+            "logo_output": logo_output,
+        })
+    except Exception as exc:
+        return jsonify({"success": False, "message": str(exc)}), 500
 
 
 @app.route("/<path:filename>")

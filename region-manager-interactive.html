@@ -61,11 +61,21 @@
         .modal-content p { color: #718096; margin-bottom: 20px; }
         .modal-buttons { display: flex; gap: 10px; justify-content: center; }
     </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script>
+        // Set up PDF.js worker
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    </script>
 </head>
 <body>
     <div class="header">
-        <h1>🗺️ Bangladesh Regional Map - Interactive Swap Manager</h1>
-        <p>Drag & drop to swap thanas between districts or districts between regions • Changes reflected in real-time</p>
+        <div style="display: flex; align-items: center; justify-content: center; gap: 20px; flex-wrap: wrap;">
+            <img src="/zaytoon-logo.png" alt="Zaytoon Business Solutions" style="height: 50px; width: auto;">
+            <div style="text-align: center;">
+                <h1 style="margin: 0;">🗺️ Bangladesh Regional Map - Interactive Swap Manager</h1>
+                <p style="margin: 5px 0 0 0;">Drag & drop to swap thanas between districts or districts between regions • Changes reflected in real-time</p>
+            </div>
+        </div>
     </div>
 
     <div class="container">
@@ -97,12 +107,45 @@
                         <button class="btn btn-sm" style="flex:1; padding:6px; font-size:0.85em; background:#4a5568; color:white; border:none; border-radius:4px; cursor:pointer;" onclick="openFullView('/outputs/bangladesh_thanas_updated_from_swaps.pdf', 'Thana Map')">🔍 Full View</button>
                     </div>
                 </div>
+                <div style="margin-bottom: 15px;">
+                    <h3 style="margin: 10px 0 8px 0; font-size: 0.95em; color: #2d3748;">Region-wise Maps (10 Areas with District Labels)</h3>
+                    <div style="display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap;">
+                        <label for="regionSelect" style="align-self:center; font-weight:600; color:#2d3748;">View Region:</label>
+                        <select id="regionSelect" style="padding:6px 10px; border:1px solid #cbd5e0; border-radius:4px; cursor:pointer; font-size:0.9em;" onchange="loadRegionPdf()">
+                            <option value="">-- Select a Region --</option>
+                            <option value="barisal">Barisal</option>
+                            <option value="chittagong">Chittagong</option>
+                            <option value="cumilla">Cumilla</option>
+                            <option value="dhaka">Dhaka</option>
+                            <option value="faridpur">Faridpur</option>
+                            <option value="khulna">Khulna</option>
+                            <option value="mymensingh">Mymensingh</option>
+                            <option value="rajshahi">Rajshahi</option>
+                            <option value="rangpur">Rangpur</option>
+                            <option value="sylhet">Sylhet</option>
+                        </select>
+                    </div>
+                    <div id="pdfViewerContainer" style="border:1px solid #cbd5e0; border-radius:8px; background:#f9f9f9; overflow:hidden; display:none;">
+                        <div id="pdfControls" style="background:#667eea; color:white; padding:8px 12px; display:flex; justify-content:space-between; align-items:center;">
+                            <span id="pdfTitle" style="font-weight:600;">PDF Viewer</span>
+                            <div style="display:flex; gap:8px;">
+                                <button onclick="pdfPrevPage()" style="background:rgba(255,255,255,0.2); border:none; color:white; padding:6px 10px; border-radius:4px; cursor:pointer; font-size:0.85em; font-weight:600;">◀ Prev</button>
+                                <span id="pdfPageNum" style="min-width:80px; text-align:center; font-size:0.85em; font-weight:600;">Page 1 / 1</span>
+                                <button onclick="pdfNextPage()" style="background:rgba(255,255,255,0.2); border:none; color:white; padding:6px 10px; border-radius:4px; cursor:pointer; font-size:0.85em; font-weight:600;">Next ▶</button>
+                                <button onclick="openCurrentRegionPdfFullView()" style="background:rgba(255,255,255,0.3); border:none; color:white; padding:6px 10px; border-radius:4px; cursor:pointer; font-size:0.85em; font-weight:600;">🔍 Full View</button>
+                            </div>
+                        </div>
+                        <div id="pdfViewer" style="width:100%; height:600px; display:flex; align-items:center; justify-content:center; background:#f0f0f0;">
+                            <canvas id="pdfCanvas" style="max-width:100%; max-height:100%;"></canvas>
+                        </div>
+                    </div>
+                </div>
                 <div class="controls">
                     <button class="btn btn-primary" onclick="exportData()">💾 Export CSV</button>
                     <button class="btn btn-warning" onclick="generateNewMap(false)">🔄 Generate Updated Map</button>
                     <button class="btn btn-success" onclick="refreshMaps()">🖼️ Refresh Maps</button>
-                    <button class="btn btn-danger" onclick="resetChanges()">↩️ Reset Changes</button>
-                    <button class="btn btn-secondary" onclick="location.reload()">🔃 Refresh</button>
+                    <button class="btn btn-danger" onclick="resetChanges()">↩️ Reset to Original</button>
+                    <button class="btn btn-secondary" onclick="location.reload()">🔃 Refresh Page</button>
                 </div>
                 <div style="margin-top:10px; display:flex; align-items:center; gap:8px;">
                     <input type="checkbox" id="autoUpdateToggle" checked>
@@ -183,6 +226,15 @@
         let dragData = { type: null, region: null, district: null, thana: null };
         let autoUpdate = true;
         let pendingTimer = null;
+
+        // PDF Viewer Variables
+        let pdfDocument = null;
+        let currentPageNum = 1;
+        let totalPages = 0;
+        let currentRegion = null;
+        
+        // Region list in order
+        const regionsList = ['barisal', 'chittagong', 'cumilla', 'dhaka', 'faridpur', 'khulna', 'mymensingh', 'rajshahi', 'rangpur', 'sylhet'];
 
         let csvData = `Barisal	Bhola	Char Fasson
 Barisal	Bhola	Daulat Khan
@@ -1000,6 +1052,11 @@ Sylhet	Sylhet	Zakiganj`;
             districtImg.src = `/outputs/bangladesh_districts_updated_from_swaps.png?ts=${ts}`;
             thanaImg.src = `/outputs/bangladesh_thanas_updated_from_swaps.png?ts=${ts}`;
 
+            // Refresh the region PDF if one is currently open
+            if (currentRegion && document.getElementById('regionSelect').value) {
+                renderPdf(`/outputs/region_${currentRegion}.pdf?ts=${ts}`);
+            }
+
             const lastUpdate = document.getElementById('lastUpdate');
             if (lastUpdate) lastUpdate.textContent = new Date().toLocaleString();
         }
@@ -1038,13 +1095,27 @@ Sylhet	Sylhet	Zakiganj`;
         }
 
         async function resetChanges() {
-            if (confirm('Reset to current saved map data?')) {
+            if (confirm('⚠️ Reset to ORIGINAL map state?\n\nThis will discard ALL changes and restore the initial map configuration.')) {
                 try {
                     showModal(true);
-                    const response = await fetch('/region_swapped_data.csv');
-                    if (!response.ok) throw new Error('Failed to load CSV');
                     
-                    const csvText = await response.text();
+                    // Call backend reset endpoint
+                    const response = await fetch('/reset', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (!data.success) {
+                        throw new Error(data.message || 'Reset failed');
+                    }
+                    
+                    // Reload CSV from server to refresh UI
+                    const csvResponse = await fetch('/region_swapped_data.csv?t=' + Date.now());
+                    if (!csvResponse.ok) throw new Error('Failed to reload CSV');
+                    
+                    const csvText = await csvResponse.text();
                     const lines = csvText.trim().split('\n');
                     
                     // Clear current structure
@@ -1072,11 +1143,18 @@ Sylhet	Sylhet	Zakiganj`;
                     
                     // Re-render UI
                     renderRegions();
+                    
+                    // Reload map images with cache bust
+                    const timestamp = Date.now();
+                    document.getElementById('districtMapImg').src = '/outputs/bangladesh_districts_updated_from_swaps.png?t=' + timestamp;
+                    document.getElementById('thanaMapImg').src = '/outputs/bangladesh_thanas_updated_from_swaps.png?t=' + timestamp;
+                    document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString();
+                    
                     showModal(false);
-                    showNotif('Map data reset to saved version!');
+                    showNotif('✅ Map restored to original state!', 'success');
                 } catch (error) {
                     showModal(false);
-                    alert('Error loading saved data: ' + error.message);
+                    alert('❌ Error resetting map: ' + error.message);
                 }
             }
         }
@@ -1106,6 +1184,91 @@ Sylhet	Sylhet	Zakiganj`;
                 stats += `${region}: ${districtCount} districts, ${thanaCount} thanas\n`;
             });
             alert(stats);
+        }
+
+        // PDF Viewer Functions
+        async function loadRegionPdf() {
+            const regionSelect = document.getElementById('regionSelect');
+            const region = regionSelect.value;
+            if (!region) {
+                document.getElementById('pdfViewerContainer').style.display = 'none';
+                return;
+            }
+            currentRegion = region;
+            // Update page indicator with region name
+            const regionName = region.charAt(0).toUpperCase() + region.slice(1);
+            document.getElementById('pdfPageNum').textContent = `Region: ${regionName}`;
+            await renderPdf(`/outputs/region_${region}.pdf?ts=${Date.now()}`);
+        }
+
+        function selectAndViewRegion(region) {
+            document.getElementById('regionSelect').value = region;
+            currentRegion = region;
+            renderPdf(`/outputs/region_${region}.pdf?ts=${Date.now()}`);
+        }
+
+        async function renderPdf(url) {
+            try {
+                const pdf = await pdfjsLib.getDocument(url).promise;
+                pdfDocument = pdf;
+                totalPages = pdf.numPages;
+                currentPageNum = 1;
+                document.getElementById('pdfViewerContainer').style.display = 'block';
+                document.getElementById('pdfTitle').textContent = `Region Map: ${currentRegion.charAt(0).toUpperCase() + currentRegion.slice(1)}`;
+                await renderPage(1);
+            } catch (error) {
+                console.error('Error loading PDF:', error);
+                showNotif('Error loading PDF. Ensure the region map is generated.');
+            }
+        }
+
+        async function renderPage(pageNum) {
+            if (!pdfDocument || pageNum < 1 || pageNum > totalPages) {
+                console.warn('Cannot render page:', { pdfDocument: !!pdfDocument, pageNum, totalPages });
+                return;
+            }
+            try {
+                currentPageNum = pageNum;
+                const page = await pdfDocument.getPage(pageNum);
+                const viewport = page.getViewport({ scale: 2 });
+                const canvas = document.getElementById('pdfCanvas');
+                const context = canvas.getContext('2d');
+                canvas.width = viewport.width;
+                canvas.height = viewport.height;
+                await page.render({ canvasContext: context, viewport: viewport }).promise;
+                console.log('Page rendered:', pageNum);
+            } catch (error) {
+                console.error('Error rendering page:', error);
+            }
+        }
+
+        async function pdfNextPage() {
+            if (!currentRegion) return;
+            const currentIndex = regionsList.indexOf(currentRegion);
+            if (currentIndex < regionsList.length - 1) {
+                const nextRegion = regionsList[currentIndex + 1];
+                document.getElementById('regionSelect').value = nextRegion;
+                await loadRegionPdf();
+            }
+        }
+
+        async function pdfPrevPage() {
+            if (!currentRegion) return;
+            const currentIndex = regionsList.indexOf(currentRegion);
+            if (currentIndex > 0) {
+                const prevRegion = regionsList[currentIndex - 1];
+                document.getElementById('regionSelect').value = prevRegion;
+                await loadRegionPdf();
+            }
+        }
+
+        function openCurrentRegionPdfFullView() {
+            if (currentRegion) {
+                const pdfUrl = `/outputs/region_${currentRegion}.pdf?t=${new Date().getTime()}`;
+                window.open(pdfUrl, '_blank');
+            } else {
+                showNotif('Please select a region first');
+            }
         }
 
         document.addEventListener('DOMContentLoaded', async () => {

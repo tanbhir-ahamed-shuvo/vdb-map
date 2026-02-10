@@ -102,6 +102,23 @@ map_with_regions$Region <- ifelse(
   map_with_regions$Region
 )
 
+# Define consistent colors for regions (matching full map)
+region_colors <- c(
+  'Barisal' = '#FF6B6B',
+  'Chittagong' = '#4ECDC4',
+  'Cumilla' = '#45B7D1',
+  'Dhaka' = '#96CEB4',
+  'Faridpur' = '#FFEAA7',
+  'Khulna' = '#DDA15E',
+  'Mymensingh' = '#BC6C25',
+  'Rajshahi' = '#C9ADA7',
+  'Rangpur' = '#9A8C98',
+  'Sylhet' = '#F4A261'
+)
+
+# Add color column to map_with_regions
+map_with_regions$RegionColor <- region_colors[map_with_regions$Region]
+
 # Print matching statistics
 matched <- sum(!is.na(map_with_regions$Region))
 total <- nrow(map_with_regions)
@@ -154,9 +171,12 @@ district_regions <- region_data %>%
 
 district_map <- left_join(district_map, district_regions, by = "District_norm")
 
+# Add color column to district_map
+district_map$RegionColor <- region_colors[district_map$Region]
+
 map_districts <- tm_shape(district_map) +
-  tm_polygons("Region",
-              palette = "Set3",
+  tm_polygons(col = "Region",
+              palette = region_colors,
               border.col = "black",
               lwd = 1.5,
               title = "Regions") +
@@ -176,20 +196,22 @@ map_districts <- tm_shape(district_map) +
     shadow = TRUE) +
   tm_layout(title = "Bangladesh - 64 Districts in 10 Regions",
             title.position = c("center", "top"),
-            title.size = 1.5,
+            title.size = 1.3,
             legend.outside = TRUE,
             legend.outside.position = "right",
             legend.text.size = 0.9,
             component.autoscale = FALSE,
-            frame = FALSE)
+            frame = FALSE,
+            inner.margins = c(0, 0, 0.22, 0),
+            outer.margins = 0)
 
 tmap_save(map_districts, "outputs/bangladesh_districts_updated_from_swaps.png", width = 4200, height = 3000, dpi = 300)
 cat("✓ District PNG saved\n")
 
 # Create PDF version with smaller labels and better layout
 map_districts_pdf <- tm_shape(district_map) +
-  tm_polygons("Region",
-              palette = "Set3",
+  tm_polygons(col = "Region",
+              palette = region_colors,
               border.col = "black",
               lwd = 1,
               title = "Regions") +
@@ -207,13 +229,13 @@ map_districts_pdf <- tm_shape(district_map) +
     remove.overlap = FALSE) +
   tm_layout(title = "Bangladesh - 64 Districts in 10 Regions",
             title.position = c("left", "top"),
-            title.size = 0.9,
+            title.size = 0.8,
             legend.outside = TRUE,
             legend.outside.position = "right",
             legend.outside.size = 0.15,
             legend.text.size = 0.6,
             legend.title.size = 0.8,
-            inner.margins = c(0.02, 0.02, 0.15, 0.02),
+            inner.margins = c(0.02, 0.02, 0.22, 0.02),
             outer.margins = 0,
             frame = FALSE)
 
@@ -230,8 +252,8 @@ district_dhaka <- district_map %>% filter(District_label == "Dhaka")
 district_other <- district_map %>% filter(District_label != "Dhaka")
 
 map_thanas_labeled <- tm_shape(map_with_regions) +
-  tm_polygons("Region",
-              palette = "Set3",
+  tm_polygons(col = "Region",
+              palette = region_colors,
               border.col = "white",
               lwd = 0.3,
               title = "Regions") +
@@ -240,19 +262,23 @@ map_thanas_labeled <- tm_shape(map_with_regions) +
   # Other district labels - bigger
   tm_shape(district_other) +
   tm_text("District_label",
-          size = 0.85,
+      size = 0.7,
           col = "darkblue",
           fontface = "bold",
-          remove.overlap = FALSE,
-          auto.placement = FALSE) +
+      bg.color = "white",
+      bg.alpha = 0.6,
+      remove.overlap = TRUE,
+      auto.placement = TRUE) +
   # Dhaka district label - same size
   tm_shape(district_dhaka) +
   tm_text("District_label",
-          size = 0.6,
+      size = 0.5,
           col = "darkblue",
           fontface = "bold",
-          remove.overlap = FALSE,
-          auto.placement = FALSE) +
+      bg.color = "white",
+      bg.alpha = 0.6,
+      remove.overlap = TRUE,
+      auto.placement = TRUE) +
   # Other thanas - bigger
   tm_shape(map_other) +
   tm_text("Upazila",
@@ -264,28 +290,123 @@ map_thanas_labeled <- tm_shape(map_with_regions) +
   # Dhaka thanas - smaller with more aggressive overlap removal
   tm_shape(map_dhaka) +
   tm_text("Upazila",
-          size = 0.12,
+      size = 0.18,
           col = "black",
           fontface = "plain",
           remove.overlap = TRUE,
           auto.placement = TRUE) +
   tm_layout(title = "Bangladesh - Districts and Thanas/Upazilas by Region",
             title.position = c("center", "top"),
-            title.size = 2.5,
+            title.size = 2.2,
             legend.outside = TRUE,
             legend.outside.position = "right",
             legend.outside.size = 0.25,
             legend.text.size = 1.8,
             legend.title.size = 2.2,
-            inner.margins = c(0.05, 0.02, 0.18, 0.02),
-            outer.margins = c(0.02, 0, 0, 0),
+            inner.margins = c(0.05, 0.02, 0.24, 0.02),
+            outer.margins = 0,
             frame = FALSE)
 
-tmap_save(map_thanas_labeled, "outputs/bangladesh_thanas_updated_from_swaps.pdf", width = 42, height = 30, dpi = 600)
+tmap_save(map_thanas_labeled, "outputs/bangladesh_thanas_updated_from_swaps.pdf", width = 50, height = 36, dpi = 600)
 cat("✓ Thana PDF saved (42×30\" @ 600 DPI)\n")
 
 tmap_save(map_thanas_labeled, "outputs/bangladesh_thanas_updated_from_swaps.png", width = 5400, height = 3800, dpi = 300)
 cat("✓ Thana PNG saved (5400×3800 px @ 300 DPI)\n")
+
+# Create individual PDFs for each of the 10 regions
+cat("\nCreating region-wise maps (10 files, one per region)...\n")
+region_list <- sort(unique(map_with_regions$Region))
+
+for (region_name in region_list) {
+  region_thanas <- map_with_regions %>% filter(Region == region_name)
+  region_districts <- district_map %>%
+    filter(District_norm %in% unique(region_thanas$District_norm))
+
+  # Split districts into Dhaka and others
+  district_dhaka_region <- region_districts %>% filter(District_label == "Dhaka")
+  district_other_region <- region_districts %>% filter(District_label != "Dhaka")
+
+  # Split thanas into Dhaka and others
+  thanas_dhaka_region <- region_thanas %>% filter(District == "Dhaka")
+  thanas_other_region <- region_thanas %>% filter(District != "Dhaka")
+
+  # Build the region map dynamically based on what's available
+  region_map <- tm_shape(region_thanas) +
+    tm_polygons(col = "Region",
+                palette = region_colors,
+                border.col = "white",
+                lwd = 0.3,
+                title = "Regions")
+
+  # Add district borders
+  region_map <- region_map + tm_shape(region_districts) +
+    tm_borders(col = "black", lwd = 1.5)
+
+  # Add other districts labels if they exist
+  if (nrow(district_other_region) > 0) {
+    region_map <- region_map + tm_shape(district_other_region) +
+      tm_text("District_label",
+              size = 0.65,
+              col = "darkblue",
+              fontface = "bold",
+              bg.color = "white",
+              bg.alpha = 0.7,
+              remove.overlap = TRUE,
+              auto.placement = TRUE)
+  }
+
+  # Add Dhaka district label if it exists in this region
+  if (nrow(district_dhaka_region) > 0) {
+    region_map <- region_map + tm_shape(district_dhaka_region) +
+      tm_text("District_label",
+              size = 0.5,
+              col = "darkblue",
+              fontface = "bold",
+              bg.color = "white",
+              bg.alpha = 0.7,
+              remove.overlap = TRUE,
+              auto.placement = TRUE)
+  }
+
+  # Add other thanas labels
+  if (nrow(thanas_other_region) > 0) {
+    region_map <- region_map + tm_shape(thanas_other_region) +
+      tm_text("Upazila",
+              size = 0.28,
+              col = "black",
+              fontface = "plain",
+              remove.overlap = TRUE,
+              auto.placement = TRUE)
+  }
+
+  # Add Dhaka thanas labels if they exist
+  if (nrow(thanas_dhaka_region) > 0) {
+    region_map <- region_map + tm_shape(thanas_dhaka_region) +
+      tm_text("Upazila",
+              size = 0.15,
+              col = "black",
+              fontface = "plain",
+              remove.overlap = TRUE,
+              auto.placement = TRUE)
+  }
+
+  # Add layout with margins to prevent title overlap and show legend
+  region_map <- region_map + tm_layout(title = paste("Region:", region_name),
+                                       title.position = c("center", "top"),
+                                       title.size = 1.1,
+                                       legend.outside = TRUE,
+                                       legend.outside.position = "right",
+                                       legend.outside.size = 0.15,
+                                       legend.text.size = 0.85,
+                                       legend.title.size = 1.0,
+                                       frame = FALSE,
+                                       inner.margins = c(0.05, 0.05, 0.22, 0.05),
+                                       outer.margins = 0)
+
+  file_name <- paste0("outputs/region_", tolower(gsub(" ", "_", region_name)), ".pdf")
+  tmap_save(region_map, file_name, width = 14, height = 10, dpi = 300)
+  cat(paste0("✓ ", region_name, " PDF saved (with district labels)\n"))
+}
 
 # Print summary statistics
 cat("\n=== Summary Statistics ===\n")
@@ -304,3 +425,32 @@ cat("  - outputs/bangladesh_districts_updated_from_swaps.png\n")
 cat("  - outputs/bangladesh_districts_updated_from_swaps.pdf\n")
 cat("  - outputs/bangladesh_thanas_updated_from_swaps.png\n")
 cat("  - outputs/bangladesh_thanas_updated_from_swaps.pdf\n")
+cat("  - outputs/region_*.pdf (10 individual region maps)\n")
+
+# Create a color reference CSV
+cat("\nCreating color reference...\n")
+color_ref <- data.frame(
+  Region = names(region_colors),
+  HexColor = unname(region_colors),
+  stringsAsFactors = FALSE
+)
+
+write.csv(color_ref, "outputs/region_colors.csv", row.names = FALSE)
+cat("✓ Color reference saved to outputs/region_colors.csv\n")
+cat("\n✓ All maps generated successfully!\n")
+
+# Automatically add Zaytoon logo to all generated maps
+cat("\n🎨 Adding Zaytoon logo to maps...\n")
+
+tryCatch({
+  # Add logo to PDFs
+  system("python add_logo_to_pdfs.py", wait = TRUE)
+  
+  # Add logo to PNGs
+  system("python add_logo_to_pngs.py", wait = TRUE)
+  
+  cat("✓ Logos added successfully!\n")
+}, error = function(e) {
+  cat("⚠ Warning: Could not add logos -", e$message, "\n")
+  cat("  Maps generated without logo overlay\n")
+})
