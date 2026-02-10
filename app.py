@@ -299,6 +299,83 @@ def favicon() -> Response:
     return Response(status=204)
 
 
+@app.route("/health")
+def health_check() -> Any:
+    """Health check endpoint for deployment diagnostics"""
+    return jsonify({
+        "status": "healthy",
+        "service": "VDB MAP 2.1",
+        "timestamp": str(Path(__file__).stat().st_mtime)
+    })
+
+
+@app.route("/diagnostics")
+def diagnostics() -> Any:
+    """Diagnostic endpoint to check system configuration"""
+    import sys
+    import platform
+    
+    diagnostics_info = {
+        "python_version": sys.version,
+        "python_executable": sys.executable,
+        "platform": platform.platform(),
+        "base_dir": str(BASE_DIR),
+        "output_dir": str(OUTPUT_DIR),
+        "output_dir_exists": OUTPUT_DIR.exists(),
+        "output_dir_writable": os.access(OUTPUT_DIR, os.W_OK),
+    }
+    
+    # Check for required files
+    diagnostics_info["required_files"] = {
+        "region_swapped_data.csv": (BASE_DIR / "region_swapped_data.csv").exists(),
+        "region_swapped_data_original.csv": (BASE_DIR / "region_swapped_data_original.csv").exists(),
+        "generate_map_from_swaps.R": (BASE_DIR / "generate_map_from_swaps.R").exists(),
+        "zaytoon-logo.png": (BASE_DIR / "zaytoon-logo.png").exists(),
+        "add_logo_to_pdfs.py": (BASE_DIR / "add_logo_to_pdfs.py").exists(),
+        "add_logo_to_pngs.py": (BASE_DIR / "add_logo_to_pngs.py").exists(),
+    }
+    
+    # Check R installation
+    try:
+        r_check = subprocess.run(
+            ["Rscript", "--version"],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        diagnostics_info["r_installed"] = r_check.returncode == 0
+        diagnostics_info["r_version"] = r_check.stderr.strip() if r_check.returncode == 0 else "Not installed"
+    except Exception as e:
+        diagnostics_info["r_installed"] = False
+        diagnostics_info["r_error"] = str(e)
+    
+    # Check Python packages
+    try:
+        from pypdf import PdfReader
+        diagnostics_info["pypdf_installed"] = True
+    except ImportError:
+        diagnostics_info["pypdf_installed"] = False
+    
+    try:
+        from PIL import Image
+        diagnostics_info["pillow_installed"] = True
+    except ImportError:
+        diagnostics_info["pillow_installed"] = False
+    
+    try:
+        from reportlab.pdfgen import canvas
+        diagnostics_info["reportlab_installed"] = True
+    except ImportError:
+        diagnostics_info["reportlab_installed"] = False
+    
+    # Check output files
+    output_files = list(OUTPUT_DIR.glob("*.pdf")) + list(OUTPUT_DIR.glob("*.png"))
+    diagnostics_info["output_files_count"] = len(output_files)
+    diagnostics_info["output_files"] = [f.name for f in output_files[:10]]  # First 10
+    
+    return jsonify(diagnostics_info)
+
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=False)

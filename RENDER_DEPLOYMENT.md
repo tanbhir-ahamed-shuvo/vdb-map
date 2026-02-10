@@ -85,18 +85,100 @@ Upgrade to Starter plan ($7/month) in Render dashboard.
 
 ## 🐛 Troubleshooting
 
-**Build fails?**
+### **Issue: District movements not working**
+
+**Symptoms:**
+- Web interface loads but map generation fails
+- Changes don't save or update maps
+- Reset to original doesn't work
+
+**Solutions:**
+
+1. **Check diagnostics endpoint:**
+   ```
+   https://your-app.onrender.com/diagnostics
+   ```
+   This shows:
+   - Python packages installed (pypdf, pillow, reportlab)
+   - R installation status
+   - File write permissions
+   - Required files present
+
+2. **Verify dependencies installed:**
+   - Check build logs for successful installation
+   - Ensure `pypdf`, `pillow`, and `reportlab` are installed
+   - Verify R packages: `sf`, `tmap`, `dplyr`, `bangladesh`
+
+3. **Check file permissions:**
+   - Render needs write access to `outputs/` folder
+   - Build script sets permissions: `chmod -R 755 outputs`
+
+4. **Verify backup file exists:**
+   - `region_swapped_data_original.csv` must exist for reset
+   - Build script creates it automatically
+
+5. **Check Python executable:**
+   - Logo scripts use `sys.executable`
+   - Diagnostics shows correct Python path
+
+**Debugging steps:**
+
+```bash
+# 1. Visit diagnostics page
+https://your-app.onrender.com/diagnostics
+
+# 2. Check health endpoint
+https://your-app.onrender.com/health
+
+# 3. Review Render logs
+# Go to Render Dashboard → Your Service → Logs
+
+# 4. Test manually after deployment
+curl -X POST https://your-app.onrender.com/generate \
+  -H "Content-Type: application/json" \
+  -d @test_payload.json
+```
+
+### **Build fails?**
 - Check the build logs in Render dashboard
-- Ensure all dependencies in `requirements.txt` and `build.sh`
+- Ensure all dependencies in `requirements.txt`:
+  - flask==3.0.3
+  - pypdf>=4.0.0
+  - pillow>=10.0.0
+  - reportlab>=4.0.0
+- Verify `build.sh` is executable
 
 **Maps not generating?**
-- R packages might need time to install
+- R packages take 5-10 minutes to install
 - Check "Logs" tab in Render dashboard
+- Look for R installation errors
+- Verify GDAL, GEOS, PROJ libraries installed
 
 **App doesn't start?**
 - Verify `PORT` environment variable is used in `app.py`
 - Check for Python syntax errors in logs
+- Ensure Flask starts on `0.0.0.0` not `localhost`
+
+**Logos not appearing?**
+- Check if pypdf, pillow, reportlab are installed
+- Visit `/diagnostics` to verify package status
+- Logo scripts need all three packages
+- Check build logs for installation errors
+
+## 🔍 Diagnostic Endpoints
+
+**Added in latest version:**
+
+- `GET /health` - Basic health check
+- `GET /diagnostics` - Complete system diagnostics
+  - Python version and packages
+  - R installation status
+  - File permissions
+  - Available output files
+
+Use these to troubleshoot deployment issues.
 
 ## 📞 Support
 
 For Render-specific issues: https://render.com/docs
+For app issues: Check GitHub repository issues
