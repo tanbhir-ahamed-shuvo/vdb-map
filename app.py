@@ -4,14 +4,30 @@ import json
 import os
 import shutil
 import subprocess
+import sys
+import io
 from pathlib import Path
 from typing import Any, Dict, List
+from datetime import datetime
 
 from flask import Flask, jsonify, request, send_from_directory, Response
 
 BASE_DIR = Path(__file__).resolve().parent
 OUTPUT_DIR = BASE_DIR / "outputs"
 OUTPUT_DIR.mkdir(exist_ok=True)
+LOG_FILE = BASE_DIR / "app_debug.log"
+
+# Set up logging
+def log_debug(message: str) -> None:
+    """Log debug message to both console and file"""
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    log_msg = f"[{timestamp}] {message}"
+    print(log_msg, file=sys.stderr)
+    try:
+        with open(LOG_FILE, "a", encoding="utf-8") as f:
+            f.write(log_msg + "\n")
+    except:
+        pass
 
 app = Flask(__name__, static_folder="outputs", static_url_path="/outputs")
 
@@ -44,10 +60,15 @@ def index() -> Any:
 @app.route("/generate", methods=["POST"])
 def generate() -> Any:
     try:
+        log_debug("=" * 70)
+        log_debug("GENERATE ENDPOINT CALLED")
+        
         payload: List[Dict[str, str]] = request.get_json(force=True)
         if not isinstance(payload, list) or len(payload) == 0:
+            log_debug("ERROR: No data provided")
             return jsonify({"success": False, "message": "No data provided"}), 400
 
+        log_debug(f"Received {len(payload)} records from client")
         csv_path = BASE_DIR / "region_swapped_data.csv"
         
         # Load existing CSV to preserve spellings and corrections
@@ -60,8 +81,9 @@ def generate() -> Any:
                     if len(parts) >= 3:
                         region, district, thana = parts[0], parts[1], parts[2]
                         existing_data[(district.strip(), thana.strip())] = (region.strip(), district.strip(), thana.strip())
+            log_debug(f"Loaded {len(existing_data)} existing records from CSV")
         except FileNotFoundError:
-            pass
+            log_debug("WARNING: CSV file not found, starting fresh")
 
         # Build new data, preserving spellings from existing CSV
         output_rows = []
@@ -82,12 +104,28 @@ def generate() -> Any:
             if region and district and thana:
                 output_rows.append((region, district, thana))
         
+        log_debug(f"Prepared {len(output_rows)} records for CSV")
+        
         # Write CSV maintaining header
-        with csv_path.open("w", encoding="utf-8", newline="") as f:
-            f.write("Region,District,Thana\n")
-            for region, district, thana in output_rows:
-                f.write(f"{region},{district},{thana}\n")
+        try:
+            with csv_path.open("w", encoding="utf-8", newline="") as f:
+                f.write("Region,District,Thana\n")
+                for region, district, thana in output_rows:
+                    f.write(f"{region},{district},{thana}\n")
+            log_debug(f"✓ CSV written successfully to {csv_path}")
+            
+            # Verify CSV was written
+            with csv_path.open("r", encoding="utf-8") as f:
+                csv_content = f.read()
+                line_count = len(csv_content.split("\n")) - 1
+            log_debug(f"✓ CSV verification: {line_count} records (including header)")
+            
+        except Exception as e:
+            log_debug(f"ERROR writing CSV: {str(e)}")
+            return jsonify({"success": False, "message": f"CSV write error: {str(e)}"}), 500
 
+        # Call R script
+        log_debug("Calling R script: generate_map_from_swaps.R")
         cmd = ["Rscript", "generate_map_from_swaps.R"]
         result = subprocess.run(
             cmd,
@@ -96,6 +134,12 @@ def generate() -> Any:
             text=True,
             check=False,
         )
+        
+        log_debug(f"R script return code: {result.returncode}")
+        if result.stdout:
+            log_debug(f"R stdout (first 500 chars): {result.stdout[:500]}")
+        if result.stderr:
+            log_debug(f"R stderr (first 500 chars): {result.stderr[:500]}")
 
         district_png = OUTPUT_DIR / "bangladesh_districts_updated_from_swaps.png"
         thana_png = OUTPUT_DIR / "bangladesh_thanas_updated_from_swaps.png"
@@ -103,27 +147,31 @@ def generate() -> Any:
         thana_pdf = OUTPUT_DIR / "bangladesh_thanas_updated_from_swaps.pdf"
 
         outputs_exist = all(p.exists() for p in [district_png, thana_png, district_pdf, thana_pdf])
+        log_debug(f"Map files exist: PNG={district_png.exists() and thana_png.exists()}, PDF={district_pdf.exists() and thana_pdf.exists()}")
 
         if result.returncode != 0 and not outputs_exist:
+            log_debug(f"ERROR: R script failed and no output files exist")
             return jsonify(
                 {
                     "success": False,
                     "message": "Map generation failed",
-                    "stdout": result.stdout,
-                    "stderr": result.stderr,
+                    "stdout": result.stdout[:1000],
+                    "stderr": result.stderr[:1000],
                 }
             ), 500
 
         # Add logos to generated maps - CRITICAL for branding
+        log_debug("Starting logo addition process")
         logo_output = ""
         logo_success = False
         
         try:
-            import sys
             python_exe = sys.executable
+            log_debug(f"Using Python: {python_exe}")
             
             # Add logos to PDFs
             pdf_script = BASE_DIR / "add_logo_to_pdfs.py"
+            log_debug("Calling add_logo_to_pdfs.py")
             pdf_result = subprocess.run(
                 [python_exe, str(pdf_script)],
                 cwd=str(BASE_DIR),
@@ -136,9 +184,11 @@ def generate() -> Any:
             logo_output += pdf_result.stdout + "\n"
             if pdf_result.stderr:
                 logo_output += "PDF Errors: " + pdf_result.stderr + "\n"
+            log_debug(f"PDF logo return code: {pdf_result.returncode}")
             
             # Add logos to PNGs
             png_script = BASE_DIR / "add_logo_to_pngs.py"
+            log_debug("Calling add_logo_to_pngs.py")
             png_result = subprocess.run(
                 [python_exe, str(png_script)],
                 cwd=str(BASE_DIR),
@@ -151,16 +201,23 @@ def generate() -> Any:
             logo_output += png_result.stdout + "\n"
             if png_result.stderr:
                 logo_output += "PNG Errors: " + png_result.stderr + "\n"
+            log_debug(f"PNG logo return code: {png_result.returncode}")
             
             logo_success = pdf_result.returncode == 0 and png_result.returncode == 0
+            log_debug(f"✓ Logo addition complete - success: {logo_success}")
             
         except subprocess.TimeoutExpired:
+            log_debug("ERROR: Logo addition timed out")
             logo_output += "\n⚠ Logo addition timed out\n"
         except Exception as e:
+            log_debug(f"ERROR in logo addition: {str(e)}")
             logo_output += f"\n⚠ Logo addition error: {str(e)}\n"
             import traceback
             logo_output += traceback.format_exc()
 
+        log_debug(f"\nGeneration complete. Logo success: {logo_success}")
+        log_debug("=" * 70)
+        
         return jsonify(
             {
                 "success": True,
@@ -172,11 +229,14 @@ def generate() -> Any:
                     "thana_pdf": "/outputs/bangladesh_thanas_updated_from_swaps.pdf",
                 },
                 "logo_applied": logo_success,
-                "stdout": result.stdout + "\n\n" + logo_output,
-                "stderr": result.stderr,
+                "stdout": result.stdout[-2000:] if result.stdout else "",  # Last 2000 chars
+                "stderr": result.stderr[-2000:] if result.stderr else "",
             }
         )
     except Exception as exc:  # noqa: BLE001
+        log_debug(f"EXCEPTION in generate: {str(exc)}")
+        import traceback
+        log_debug(traceback.format_exc())
         return jsonify({"success": False, "message": str(exc)}), 500
 
 
@@ -287,6 +347,62 @@ def reset_to_original() -> Any:
         })
     except Exception as exc:
         return jsonify({"success": False, "message": str(exc)}), 500
+
+
+@app.route("/debug/csv")
+def debug_csv() -> Any:
+    """View current CSV content for debugging"""
+    try:
+        csv_path = BASE_DIR / "region_swapped_data.csv"
+        if not csv_path.exists():
+            return jsonify({"error": "CSV file not found"}), 404
+        
+        with csv_path.open("r", encoding="utf-8") as f:
+            content = f.read()
+        
+        lines = content.split("\n")
+        return jsonify({
+            "file": str(csv_path),
+            "total_lines": len([l for l in lines if l.strip()]),
+            "content": content,
+            "preview": lines[:10]  # First 10 lines
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/debug/logs")
+def debug_logs() -> Any:
+    """View debug logs for troubleshooting"""
+    try:
+        if not LOG_FILE.exists():
+            return jsonify({"message": "No logs yet"}), 200
+        
+        with open(LOG_FILE, "r", encoding="utf-8") as f:
+            content = f.read()
+        
+        lines = content.split("\n")
+        return jsonify({
+            "file": str(LOG_FILE),
+            "total_lines": len([l for l in lines if l.strip()]),
+            "last_50_lines": lines[-50:],  # Last 50 lines
+            "full_content_length": len(content)
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/debug/clear")
+def debug_clear() -> Any:
+    """Clear debug logs"""
+    try:
+        if LOG_FILE.exists():
+            LOG_FILE.unlink()
+            return jsonify({"message": "Logs cleared"})
+        else:
+            return jsonify({"message": "No logs to clear"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/<path:filename>")
