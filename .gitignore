@@ -38,9 +38,9 @@ wheels/
 .DS_Store
 Thumbs.db
 
-# Outputs (optional - comment out if you want to commit initial maps)
-# outputs/*.png
-# outputs/*.pdf
+# Outputs (commit initial maps for Render deployment)
+outputs/districts/*.pdf
+outputs/districts/*.png
 
 # Temporary files and logs
 *.log
@@ -49,8 +49,7 @@ map_progress.txt
 script_output.txt
 -w
 
-# GeoJSON outputs
-geojson/
+# GeoJSON outputs (committed for Render deployment)
 
 # Bangladesh R package (installed during build)
 bangladesh/

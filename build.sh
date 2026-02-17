@@ -6,12 +6,13 @@ echo "📦 Installing Python dependencies..."
 pip install --upgrade pip
 pip install -r requirements.txt
 
-echo "📊 Installing R and system dependencies..."
-apt-get update
-apt-get install -y r-base libgdal-dev libgeos-dev libproj-dev libudunits2-dev
-
-echo "📈 Installing R packages..."
-Rscript -e "install.packages(c('sf', 'tmap', 'dplyr', 'bangladesh'), repos='https://cloud.r-project.org/', dependencies=TRUE)"
+echo "📊 Checking if R is available..."
+if command -v Rscript &> /dev/null; then
+    echo "📈 Installing R packages..."
+    Rscript -e "install.packages(c('sf', 'tmap', 'dplyr', 'bangladesh'), repos='https://cloud.r-project.org/', dependencies=TRUE)" || echo "⚠️ R package installation failed, will use existing packages"
+else
+    echo "⚠️ R not available in this environment. R scripts will need pre-built output."
+fi
 
 echo "🗂️ Creating necessary directories..."
 mkdir -p outputs
