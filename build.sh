@@ -15,12 +15,19 @@ Rscript -e "install.packages(c('sf', 'tmap', 'dplyr', 'bangladesh'), repos='http
 
 echo "🗂️ Creating necessary directories..."
 mkdir -p outputs
+mkdir -p geojson
 chmod -R 755 outputs
+chmod -R 755 geojson
 
 echo "📋 Ensuring backup file exists..."
 if [ -f "region_swapped_data.csv" ] && [ ! -f "region_swapped_data_original.csv" ]; then
     cp region_swapped_data.csv region_swapped_data_original.csv
     echo "✓ Created backup file"
+fi
+
+echo "🗺️ Generating initial GeoJSON files..."
+if [ -f "generate_geojson.R" ]; then
+    Rscript generate_geojson.R || echo "⚠️ GeoJSON generation will happen on first run"
 fi
 
 echo "✅ Build completed successfully!"
