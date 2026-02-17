@@ -9,13 +9,19 @@ import io
 from pathlib import Path
 from typing import Any, Dict, List
 from datetime import datetime
+from functools import wraps
 
-from flask import Flask, jsonify, request, send_from_directory, Response
+import pandas as pd
+from flask import Flask, jsonify, request, send_from_directory, Response, session, redirect, url_for, render_template_string
 
 BASE_DIR = Path(__file__).resolve().parent
 OUTPUT_DIR = BASE_DIR / "outputs"
 OUTPUT_DIR.mkdir(exist_ok=True)
 LOG_FILE = BASE_DIR / "app_debug.log"
+PROGRESS_FILE = BASE_DIR / ".progress"
+
+# Global state for progress tracking
+current_progress = {"regions": 0, "districts": 0, "total_regions": 10, "total_districts": 64, "status": "idle"}
 
 # Set up logging
 def log_debug(message: str) -> None:
@@ -30,6 +36,22 @@ def log_debug(message: str) -> None:
         pass
 
 app = Flask(__name__, static_folder="outputs", static_url_path="/outputs")
+app.secret_key = 'zaytoon-map-secret-key-change-in-production'  # Change this in production!
+
+# Simple user credentials (in production, use a database with hashed passwords)
+USERS = {
+    'admin': 'zaytoon123',  # username: password
+    'manager': 'map2024',
+}
+
+def login_required(f):
+    """Decorator to require login for protected routes."""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'username' not in session:
+            return jsonify({'success': False, 'message': 'Authentication required', 'redirect': '/login'}), 401
+        return f(*args, **kwargs)
+    return decorated_function
 
 
 @app.after_request
@@ -54,10 +76,96 @@ def normalize_thana_name(thana: str) -> str:
 
 @app.route("/")
 def index() -> Any:
+    """Main dashboard - requires login."""
+    if 'username' not in session:
+        return redirect(url_for('login'))
     return send_from_directory(BASE_DIR, "region-manager-interactive.html")
 
 
+@app.route("/login", methods=["GET", "POST"])
+def login() -> Any:
+    """Login page."""
+    log_debug(f"Login route called. Method: {request.method}")
+    if request.method == "POST":
+        data = request.get_json()
+        username = data.get('username', '')
+        password = data.get('password', '')
+        
+        if username in USERS and USERS[username] == password:
+            session['username'] = username
+            return jsonify({'success': True, 'message': 'Login successful'})
+        else:
+            return jsonify({'success': False, 'message': 'Invalid username or password'}), 401
+    
+    # GET request - show login page
+    return send_from_directory(BASE_DIR, "login.html")
+
+
+@app.route("/logout")
+def logout() -> Any:
+    """Logout route."""
+    session.pop('username', None)
+    return redirect(url_for('login'))
+
+
+@app.route("/check_auth")
+def check_auth() -> Any:
+    """Check if user is authenticated."""
+    if 'username' in session:
+        return jsonify({'authenticated': True, 'username': session['username']})
+    return jsonify({'authenticated': False}), 401
+
+
+@app.route("/districts")
+def districts_viewer() -> Any:
+    return send_from_directory(BASE_DIR, "district-viewer.html")
+
+
+@app.route("/map")
+def interactive_map() -> Any:
+    return send_from_directory(BASE_DIR, "interactive-map.html")
+
+
+@app.route("/map/fullscreen")
+def interactive_map_fullscreen() -> Any:
+    return send_from_directory(BASE_DIR, "interactive-map-fullscreen.html")
+
+
+@app.route("/geojson/<path:filename>")
+def geojson_files(filename: str) -> Any:
+    return send_from_directory(BASE_DIR / "geojson", filename)
+
+
+@app.route("/progress")
+def get_progress() -> Any:
+    """Return current map generation progress."""
+    try:
+        if PROGRESS_FILE.exists():
+            # Try multiple times in case file is being written
+            max_attempts = 3
+            for attempt in range(max_attempts):
+                try:
+                    with open(PROGRESS_FILE, 'r', encoding='utf-8') as f:
+                        content = f.read().strip()
+                        if content:
+                            data = json.loads(content)
+                            return jsonify(data)
+                    break  # Success, exit the loop
+                except (IOError, json.JSONDecodeError) as e:
+                    if attempt < max_attempts - 1:
+                        import time
+                        time.sleep(0.05)  # Brief wait before retry
+                        continue
+                    else:
+                        log_debug(f"Progress file read error after {max_attempts} attempts: {e}")
+                        raise
+    except Exception as e:
+        log_debug(f"Error reading progress file: {e}")
+    return jsonify(current_progress)
+
+
 @app.route("/generate", methods=["POST"])
+@login_required
 def generate() -> Any:
     try:
         log_debug("=" * 70)
@@ -126,6 +234,12 @@ def generate() -> Any:
 
         # Call R script
         log_debug("Calling R script: generate_map_from_swaps.R")
+        
+        # Initialize progress file
+        progress_data = {"regions": 0, "districts": 0, "total_regions": 10, "total_districts": 64, "status": "generating"}
+        with open(PROGRESS_FILE, 'w', encoding='utf-8') as f:
+            json.dump(progress_data, f)
+        
         cmd = ["Rscript", "generate_map_from_swaps.R"]
         result = subprocess.run(
             cmd,
@@ -215,6 +329,23 @@ def generate() -> Any:
             import traceback
             logo_output += traceback.format_exc()
 
+        # Regenerate GeoJSON for interactive map
+        log_debug("Regenerating GeoJSON for interactive map")
+        try:
+            geojson_result = subprocess.run(
+                ["Rscript", "generate_geojson.R"],
+                cwd=str(BASE_DIR),
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=30,
+            )
+            log_debug(f"GeoJSON regeneration return code: {geojson_result.returncode}")
+            if geojson_result.stdout:
+                log_debug(f"GeoJSON stdout: {geojson_result.stdout[:200]}")
+        except Exception as e:
+            log_debug(f"ERROR regenerating GeoJSON: {str(e)}")
+
         log_debug(f"\nGeneration complete. Logo success: {logo_success}")
         log_debug("=" * 70)
         
@@ -252,7 +383,79 @@ def get_csv() -> Any:
     return response
 
 
+@app.route("/api/export-csv", methods=["GET"])
+@login_required
+def export_comparison_csv() -> Any:
+    """Export CSV with original vs current mapping comparison."""
+    try:
+        # Read original mapping
+        original_file = BASE_DIR / "District_Thana_Mapping.csv"
+        current_file = BASE_DIR / "region_swapped_data.csv"
+        
+        if not original_file.exists() or not current_file.exists():
+            return jsonify({'error': 'Mapping files not found'}), 404
+        
+        original_df = pd.read_csv(original_file)
+        current_df = pd.read_csv(current_file)
+        
+        # Create comparison list
+        comparison_data = []
+        
+        # Process each original entry
+        for _, orig_row in original_df.iterrows():
+            # Use correct column names from District_Thana_Mapping.csv
+            orig_district = orig_row.get('District (IN CSV)', '')
+            orig_thana = orig_row.get('Upazila / Thana (IN CSV)', '')
+            orig_region = orig_row.get('Region', '')
+            
+            # Find current entry in region_swapped_data.csv
+            current_matches = current_df[
+                (current_df['District'] == orig_district) & 
+                (current_df['Thana'] == orig_thana)
+            ]
+            
+            if not current_matches.empty:
+                current_row = current_matches.iloc[0]
+                current_district = current_row.get('District', orig_district)
+                current_region = current_row.get('Region', orig_region)
+                status = 'MOVED' if orig_district != current_district else 'UNCHANGED'
+            else:
+                current_district = orig_district
+                current_region = orig_region
+                status = 'UNCHANGED'
+            
+            comparison_data.append({
+                'Original_Region': orig_region,
+                'Original_District': orig_district,
+                'Original_Thana': orig_thana,
+                'Current_Region': current_region,
+                'Current_District': current_district,
+                'Current_Thana': orig_thana,
+                'Status': status
+            })
+        
+        # Create dataframe
+        export_df = pd.DataFrame(comparison_data)
+        
+        # Sort by status (MOVED first, then UNCHANGED)
+        export_df = export_df.sort_values(['Status', 'Original_District'], ascending=[False, True])
+        
+        # Generate CSV
+        csv_string = export_df.to_csv(index=False)
+        
+        # Create response
+        response = Response(csv_string, mimetype='text/csv')
+        response.headers['Content-Disposition'] = f'attachment; filename=Bangladesh_Mapping_Original_vs_Current_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv'
+        
+        return response
+    
+    except Exception as e:
+        log_debug(f"Export CSV error: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route("/reset", methods=["POST"])
+@login_required
 def reset_to_original() -> Any:
     """Reset to original map state by restoring from backup CSV."""
     try:
@@ -335,6 +538,21 @@ def reset_to_original() -> Any:
         except Exception as e:
             logo_output += f"Logo warning: {str(e)}\n"
         
+        # Regenerate GeoJSON for interactive map
+        try:
+            geojson_result = subprocess.run(
+                ["Rscript", "generate_geojson.R"],
+                cwd=str(BASE_DIR),
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=30,
+            )
+            if geojson_result.returncode != 0:
+                logo_output += f"\n⚠ GeoJSON regeneration warning: {geojson_result.stderr[:200]}\n"
+        except Exception as e:
+            logo_output += f"\n⚠ GeoJSON regeneration error: {str(e)}\n"
+        
         return jsonify({
             "success": True,
             "message": "Maps reset to original state" + (" with branding" if logo_success else " (check logo status)"),
@@ -413,6 +631,49 @@ def static_files(filename: str) -> Any:
 @app.route("/favicon.ico")
 def favicon() -> Response:
     return Response(status=204)
+
+
+@app.route("/districts/list")
+def list_districts() -> Any:
+    """List all available district maps"""
+    try:
+        districts_dir = OUTPUT_DIR / "districts"
+        if not districts_dir.exists():
+            return jsonify({"districts": [], "count": 0})
+        
+        district_files = sorted(districts_dir.glob("district_*.pdf"))
+        districts = []
+        
+        for file in district_files:
+            # Extract district name from filename: district_dhaka.pdf -> Dhaka
+            district_name = file.stem.replace("district_", "").replace("_", " ").title()
+            districts.append({
+                "name": district_name,
+                "filename": file.name,
+                "path": f"/outputs/districts/{file.name}",
+                "size": file.stat().st_size
+            })
+        
+        return jsonify({
+            "districts": districts,
+            "count": len(districts)
+        })
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/outputs/districts/<filename>")
+def serve_district_map(filename: str) -> Any:
+    """Serve district map files with no-cache headers"""
+    districts_dir = OUTPUT_DIR / "districts"
+    if not districts_dir.exists():
+        return jsonify({"error": "Districts directory not found"}), 404
+    
+    response = send_from_directory(districts_dir, filename)
+    response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, post-check=0, pre-check=0, max-age=0'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '-1'
+    return response
 
 
 @app.route("/health")
@@ -494,4 +755,4 @@ def diagnostics() -> Any:
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port, debug=False)
+    app.run(host="0.0.0.0", port=port, debug=True)

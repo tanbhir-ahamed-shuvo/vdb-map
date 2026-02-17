@@ -42,5 +42,15 @@ Thumbs.db
 # outputs/*.png
 # outputs/*.pdf
 
+# Temporary files and logs
+*.log
+.progress
+map_progress.txt
+script_output.txt
+-w
+
+# GeoJSON outputs
+geojson/
+
 # Bangladesh R package (installed during build)
 bangladesh/

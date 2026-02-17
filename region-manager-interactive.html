@@ -48,6 +48,7 @@
         .thana-tag.dragging { opacity: 0.5; background: #e2e8f0; }
         .notification { position: fixed; bottom: 20px; right: 20px; background: #48bb78; color: white; padding: 15px 20px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 100; animation: slideIn 0.3s ease; }
         @keyframes slideIn { from { transform: translateX(400px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         .search-box { width: 100%; padding: 10px; margin-bottom: 15px; border: 1px solid #cbd5e0; border-radius: 8px; }
         .count-badge { background: rgba(255,255,255,0.3); padding: 2px 6px; border-radius: 10px; font-size: 0.7em; }
         .changes-log { background: #fffaf0; border: 1px solid #fed7d7; border-radius: 8px; padding: 12px; margin-top: 15px; max-height: 150px; overflow-y: auto; }
@@ -69,12 +70,39 @@
 </head>
 <body>
     <div class="header">
-        <div style="display: flex; align-items: center; justify-content: center; gap: 20px; flex-wrap: wrap;">
-            <img src="/zaytoon-logo.png" alt="Zaytoon Business Solutions" style="height: 50px; width: auto;">
-            <div style="text-align: center;">
-                <h1 style="margin: 0;">🗺️ Bangladesh Regional Map - Interactive Swap Manager</h1>
-                <p style="margin: 5px 0 0 0;">Drag & drop to swap thanas between districts or districts between regions • Changes reflected in real-time</p>
+        <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap;">
+            <div style="display: flex; align-items: center; gap: 20px; flex: 1; justify-content: center;">
+                <img src="/zaytoon-logo.png" alt="Zaytoon Business Solutions" style="height: 50px; width: auto;">
+                <div style="text-align: center;">
+                    <h1 style="margin: 0;">🗺️ Bangladesh Regional Map - Interactive Swap Manager</h1>
+                    <p style="margin: 5px 0 0 0;">Drag & drop to swap thanas between districts or districts between regions • Changes reflected in real-time</p>
+                </div>
             </div>
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <span id="userInfo" style="color: white; font-size: 0.9em; padding: 8px 12px; background: rgba(255,255,255,0.2); border-radius: 6px;">👤 Loading...</span>
+                <button onclick="logout()" style="background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.4); padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; transition: all 0.3s;" onmouseover="this.style.background='rgba(255,255,255,0.3)'" onmouseout="this.style.background='rgba(255,255,255,0.2)'">
+                    🚪 Logout
+                </button>
+            </div>
+        </div>
+        
+        <!-- Quick Navigation Bar -->
+        <div style="background: rgba(255,255,255,0.1); margin-top: 15px; padding: 10px; border-radius: 8px; display: flex; justify-content: center; gap: 15px; flex-wrap: wrap;">
+            <button onclick="window.scrollTo({top: 0, behavior: 'smooth'})" style="background: rgba(255,255,255,0.2); color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; transition: all 0.3s;" onmouseover="this.style.background='rgba(255,255,255,0.3)'" onmouseout="this.style.background='rgba(255,255,255,0.2)'">
+                📊 Dashboard
+            </button>
+            <button onclick="window.open('/map', '_blank')" style="background: rgba(255,255,255,0.9); color: #764ba2; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; transition: all 0.3s; box-shadow: 0 2px 8px rgba(0,0,0,0.2);" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
+                🗺️ Interactive Map
+            </button>
+            <button onclick="window.open('/districts', '_blank')" style="background: rgba(255,255,255,0.9); color: #764ba2; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; transition: all 0.3s; box-shadow: 0 2px 8px rgba(0,0,0,0.2);" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
+                🗺️ View 64 Districts
+            </button>
+            <button onclick="exportData()" style="background: rgba(255,255,255,0.2); color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; transition: all 0.3s;" onmouseover="this.style.background='rgba(255,255,255,0.3)'" onmouseout="this.style.background='rgba(255,255,255,0.2)'">
+                💾 Export Data
+            </button>
+            <button onclick="generateNewMap(false)" style="background: rgba(255,255,255,0.2); color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; transition: all 0.3s;" onmouseover="this.style.background='rgba(255,255,255,0.3)'" onmouseout="this.style.background='rgba(255,255,255,0.2)'">
+                🔄 Generate Maps
+            </button>
         </div>
     </div>
 
@@ -140,6 +168,20 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- NEW: District Maps Feature Card -->
+                <div style="background: linear-gradient(135deg, #764ba2 0%, #667eea 100%); border-radius: 12px; padding: 20px; margin: 20px 0; color: white; box-shadow: 0 8px 20px rgba(118, 75, 162, 0.3);">
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
+                        <div style="flex: 1; min-width: 250px;">
+                            <h3 style="margin: 0 0 8px 0; font-size: 1.3em; color: white;">📍 Individual District Maps</h3>
+                            <p style="margin: 0; opacity: 0.95; line-height: 1.5;">View detailed maps for each of the 64 districts showing thana boundaries. Search, navigate, and download individual district PDFs. Updates automatically when thanas are moved!</p>
+                        </div>
+                        <button onclick="window.open('/districts', '_blank')" style="padding: 15px 30px; background: white; color: #764ba2; border: none; border-radius: 8px; font-weight: 700; font-size: 1.1em; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.2); transition: all 0.3s; white-space: nowrap;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
+                            🗺️ View 64 District Maps →
+                        </button>
+                    </div>
+                </div>
+
                 <div class="controls">
                     <button class="btn btn-primary" onclick="exportData()">💾 Export CSV</button>
                     <button class="btn btn-warning" onclick="generateNewMap(false)">🔄 Generate Updated Map</button>
@@ -175,6 +217,19 @@
                     </div>
                 </div>
 
+                <!-- Individual District Maps Info Box -->
+                <div style="background: #f0f4ff; border: 2px solid #764ba2; border-radius: 10px; padding: 15px; margin: 15px 0; text-align: center;">
+                    <div style="font-size: 1.1em; font-weight: 600; color: #764ba2; margin-bottom: 8px;">
+                        ✨ NEW: Individual District Maps Available
+                    </div>
+                    <div style="color: #4a5568; font-size: 0.9em; margin-bottom: 10px;">
+                        Browse all 64 districts with detailed thana boundaries in a dedicated viewer
+                    </div>
+                    <button onclick="window.open('/districts', '_blank')" style="padding: 10px 20px; background: #764ba2; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; transition: all 0.3s;" onmouseover="this.style.background='#5e3a82'" onmouseout="this.style.background='#764ba2'">
+                        🗺️ Open District Viewer
+                    </button>
+                </div>
+
                 <input type="text" class="search-box" id="searchBox" placeholder="🔍 Search region/district/thana...">
 
                 <div id="regionsContainer"></div>
@@ -202,7 +257,7 @@
         <div class="modal-content">
             <h3>⏳ Generating Map...</h3>
             <p>Processing your changes and creating updated map. This may take a few moments.</p>
-            <div style="color: #667eea; font-size: 2em; animation: spin 1s linear infinite;">⏳</div>
+            <div style="color: #667eea; font-size: 2em; animation: spin 1s linear infinite; margin-top: 20px;">⏳</div>
         </div>
     </div>
 
@@ -980,24 +1035,34 @@ Sylhet	Sylhet	Zakiganj`;
         }
 
         function exportData() {
-            const lines = ['Region,District,Thana'];
-            Object.entries(regionStructure).forEach(([region, districts]) => {
-                Object.entries(districts).forEach(([district, thanas]) => {
-                    thanas.forEach(thana => {
-                        lines.push(`${region},${district},${thana}`);
-                    });
-                });
+            // Call the API endpoint to export original vs current comparison
+            fetch('/api/export-csv', {
+                method: 'GET'
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Export failed: ' + response.statusText);
+                }
+                return response.blob();
+            })
+            .then(blob => {
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `Bangladesh_Mapping_Comparison_${new Date().toISOString().split('T')[0]}.csv`;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+                showNotif('Comparison data exported successfully! (Original vs Current)');
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showNotif('Export failed: ' + error.message, 'error');
             });
-
-            const csv = lines.join('\n');
-            const blob = new Blob([csv], { type: 'text/csv' });
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'region_swapped_data.csv';
-            a.click();
-            showNotif('Data exported successfully!');
         }
+
+
 
         function generateNewMap(silent) {
             if (changeLog.length === 0 && !silent) {
@@ -1015,6 +1080,7 @@ Sylhet	Sylhet	Zakiganj`;
             });
 
             showModal(true);
+            
             fetch('/generate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -1028,6 +1094,17 @@ Sylhet	Sylhet	Zakiganj`;
                     if (!silent) showNotif('✓ Updated maps generated!');
                     // Reload CSV data from server to get any corrections applied by backend
                     reloadCsvData();
+                    // Signal interactive map to reload GeoJSON
+                    const updateData = {timestamp: Date.now()};
+                    localStorage.setItem('geojsonUpdated', JSON.stringify(updateData));
+                    // Broadcast to other tabs via BroadcastChannel
+                    try {
+                        const mapChannel = new BroadcastChannel('map-updates');
+                        mapChannel.postMessage({type: 'geojson-updated'});
+                        mapChannel.close();
+                    } catch (e) {
+                        console.log('BroadcastChannel not supported');
+                    }
                 } else {
                     showNotif(`⚠ ${result.message || 'Map generation failed'}`);
                 }
@@ -1149,6 +1226,18 @@ Sylhet	Sylhet	Zakiganj`;
                     document.getElementById('districtMapImg').src = '/outputs/bangladesh_districts_updated_from_swaps.png?t=' + timestamp;
                     document.getElementById('thanaMapImg').src = '/outputs/bangladesh_thanas_updated_from_swaps.png?t=' + timestamp;
                     document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString();
+                    
+                    // Signal interactive map to reload GeoJSON
+                    const updateData = {timestamp: Date.now()};
+                    localStorage.setItem('geojsonUpdated', JSON.stringify(updateData));
+                    // Broadcast to other tabs via BroadcastChannel
+                    try {
+                        const mapChannel = new BroadcastChannel('map-updates');
+                        mapChannel.postMessage({type: 'geojson-updated'});
+                        mapChannel.close();
+                    } catch (e) {
+                        console.log('BroadcastChannel not supported');
+                    }
                     
                     showModal(false);
                     showNotif('✅ Map restored to original state!', 'success');
@@ -1447,8 +1536,37 @@ Sylhet	Sylhet	Zakiganj`;
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
-            showNotif('Downloading ' + filename + '...');
         }
+        
+        // Logout function
+        function logout() {
+            if (confirm('Are you sure you want to logout?')) {
+                window.location.href = '/logout';
+            }
+        }
+        
+        // Check authentication on load
+        async function checkAuth() {
+            try {
+                const response = await fetch('/check_auth');
+                if (!response.ok) {
+                    window.location.href = '/login';
+                    return;
+                }
+                const data = await response.json();
+                if (!data.authenticated) {
+                    window.location.href = '/login';
+                    return;
+                }
+                // Update user info
+                document.getElementById('userInfo').textContent = `👤 ${data.username}`;
+            } catch (error) {
+                window.location.href = '/login';
+            }
+        }
+        
+        // Check auth on page load
+        checkAuth();
     </script>
 </body>
 </html>
