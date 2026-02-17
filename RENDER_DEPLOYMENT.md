@@ -9,19 +9,14 @@
 ### Step 1: Push to GitHub
 
 ```bash
-# Initialize git (if not already done)
-git init
-
 # Add all files
 git add .
 
 # Commit
 git commit -m "Deploy Bangladesh map system to Render"
 
-# Create a new repository on GitHub, then connect it:
-git remote add origin https://github.com/YOUR_USERNAME/vdb-map.git
-git branch -M main
-git push -u origin main
+# Push to GitHub
+git push origin main
 ```
 
 ### Step 2: Deploy on Render
@@ -33,17 +28,21 @@ git push -u origin main
 5. Render will auto-detect `render.yaml` configuration
 6. Click **Create Web Service**
 
-### Step 3: Wait for Build (5-10 minutes)
+### Step 3: Wait for Build (3-5 minutes)
 
 Render will:
-- Install Python dependencies
-- Install R and system libraries
-- Install R packages (sf, tmap, dplyr, bangladesh)
+- Install Python dependencies (Flask, pandas, pypdf, pillow, reportlab)
+- Create necessary directories (outputs, geojson)
+- Use pre-built GeoJSON files (committed to repo)
 - Start your Flask server
 
 ### Step 4: Access Your App
 
 Your app will be live at: `https://vdb-map-bangladesh.onrender.com`
+
+**Default Login Credentials:**
+- Username: `admin` | Password: `zaytoon123`
+- Username: `manager` | Password: `map2024`
 
 ## 📝 Configuration
 
@@ -165,18 +164,58 @@ curl -X POST https://your-app.onrender.com/generate \
 - Logo scripts need all three packages
 - Check build logs for installation errors
 
+## � Common Issues & Fixes
+
+**1. "Application failed to start" or 404 errors**
+- Check Render logs: Dashboard → Your Service → Logs
+- Ensure `build.sh` completed successfully
+- Verify `PORT` environment variable is set by Render automatically
+
+**2. Login page shows but can't access maps**
+- GeoJSON files are pre-generated and committed to repo
+- Check if `geojson/districts.geojson` and `geojson/thanas.geojson` exist in repo
+- Visit `/diagnostics` to verify files are present
+
+**3. CSV export not working**
+- Ensure `pandas` is in `requirements.txt`
+- Check build logs for pandas installation
+- Verify `District_Thana_Mapping.csv` is in repository
+
+**4. Maps not generating**
+- Pre-built PDF/PNG files are committed to repo
+- R is not required for basic functionality on Render free tier
+- Generate new maps by moving districts (this uses pre-existing data)
+
+**5. Session/login issues**
+- Flask secret key is set in `app.py`
+- Sessions work across restarts but not across deployments
+- Re-login after each Render deployment
+
 ## 🔍 Diagnostic Endpoints
 
 **Added in latest version:**
 
-- `GET /health` - Basic health check
+- `GET /health` - Basic health check (returns 200 if app is running)
 - `GET /diagnostics` - Complete system diagnostics
   - Python version and packages
-  - R installation status
+  - R installation status (may show not available on free tier)
   - File permissions
   - Available output files
+  - GeoJSON files status
+- `GET /check_auth` - Check if user is authenticated
 
 Use these to troubleshoot deployment issues.
+
+## 🎯 Quick Verification Checklist
+
+After deployment, verify:
+- [ ] `/login` page loads
+- [ ] Can login with admin/zaytoon123
+- [ ] Dashboard (`/`) loads after login
+- [ ] Interactive map (`/map`) shows correctly
+- [ ] CSV export works (💾 Export CSV button)
+- [ ] District viewer (`/districts`) accessible
+- [ ] Logout works and redirects to login
 
 ## 📞 Support
 
