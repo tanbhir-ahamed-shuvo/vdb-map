@@ -277,10 +277,10 @@
         <img src="/zaytoon-logo.png" alt="Zaytoon" onerror="this.style.display='none'">
         <h1>🗺️ Interactive Bangladesh Map</h1>
         <p>Explore 10 Regions → 64 Districts → 544 Thanas</p>
-        <p style="margin-top: 10px; padding: 8px 15px; background: rgba(255,255,255,0.2); border-radius: 8px; display: inline-block; font-size: 0.9em;">
+        <p style="margin-top: 10px; padding: 8px 15px; background: rgba(255,255,255,0.2); border-radius: 8px; display: inline-block; font-size: 0.9em;" id="viewStatus">
             👁️ <strong>Public View</strong> • <a href="/login" style="color: white; text-decoration: underline;">Login</a> to manage districts & thanas
         </p>
-        <div style="margin-top: 15px; display: flex; justify-content: center; gap: 10px; flex-wrap: wrap;">
+        <div style="margin-top: 15px; display: flex; justify-content: center; gap: 10px; flex-wrap: wrap;" id="headerButtons">
             <button onclick="window.location.href='/login'" style="background: rgba(255,255,255,0.2); color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; transition: all 0.3s;" onmouseover="this.style.background='rgba(255,255,255,0.3)'" onmouseout="this.style.background='rgba(255,255,255,0.2)'">
                 🔐 Admin Login
             </button>
@@ -986,6 +986,39 @@
         districtSelect.addEventListener('change', filterByDistrict);
         thanaSelect.addEventListener('change', filterByThana);
         map.on('zoomend', updateModeFromZoom);
+
+        // Check login status and update header
+        async function checkLoginStatus() {
+            try {
+                const response = await fetch('/check_auth');
+                const data = await response.json();
+                
+                if (data.authenticated) {
+                    // User is logged in - update header
+                    const viewStatus = document.getElementById('viewStatus');
+                    const headerButtons = document.getElementById('headerButtons');
+                    
+                    viewStatus.innerHTML = '🔐 <strong>Admin Mode</strong> • Manage districts & thanas';
+                    viewStatus.style.background = 'rgba(72, 187, 120, 0.3)';
+                    
+                    headerButtons.innerHTML = `
+                        <button onclick="window.location.href='/'" style="background: rgba(255,255,255,0.2); color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; transition: all 0.3s;" onmouseover="this.style.background='rgba(255,255,255,0.3)'" onmouseout="this.style.background='rgba(255,255,255,0.2)'">
+                            🏠 Home
+                        </button>
+                        <button onclick="window.open('/districts', '_blank')" style="background: rgba(255,255,255,0.2); color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; transition: all 0.3s;" onmouseover="this.style.background='rgba(255,255,255,0.3)'" onmouseout="this.style.background='rgba(255,255,255,0.2)'">
+                            📍 64 District Maps
+                        </button>
+                        <button onclick="window.location.href='/logout'" style="background: rgba(245, 101, 101, 0.3); color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; transition: all 0.3s;" onmouseover="this.style.background='rgba(245, 101, 101, 0.5)'" onmouseout="this.style.background='rgba(245, 101, 101, 0.3)'">
+                            🚪 Logout
+                        </button>
+                    `;
+                }
+            } catch (error) {
+                console.error('Error checking auth status:', error);
+            }
+        }
+        
+        checkLoginStatus();
 
         window.addEventListener('load', initializeMap);
     </script>
