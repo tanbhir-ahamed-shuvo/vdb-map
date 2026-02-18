@@ -281,9 +281,9 @@
             👁️ <strong>Public View</strong> • <a href="/login" style="color: white; text-decoration: underline;">Login</a> to manage districts & thanas
         </p>
         <div style="margin-top: 15px; display: flex; justify-content: center; gap: 10px; flex-wrap: wrap;" id="headerButtons">
-            <button onclick="window.location.href='/login'" style="background: rgba(255,255,255,0.2); color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; transition: all 0.3s;" onmouseover="this.style.background='rgba(255,255,255,0.3)'" onmouseout="this.style.background='rgba(255,255,255,0.2)'">
+            <a href="/login" style="background: rgba(255,255,255,0.2); color: white; text-decoration: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; transition: all 0.3s; display: inline-block;" onmouseover="this.style.background='rgba(255,255,255,0.3)'" onmouseout="this.style.background='rgba(255,255,255,0.2)'">
                 🔐 Admin Login
-            </button>
+            </a>
             <button onclick="window.open('/districts', '_blank')" style="background: rgba(255,255,255,0.2); color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; transition: all 0.3s;" onmouseover="this.style.background='rgba(255,255,255,0.3)'" onmouseout="this.style.background='rgba(255,255,255,0.2)'">
                 📍 64 District Maps
             </button>
@@ -1002,15 +1002,15 @@
                     viewStatus.style.background = 'rgba(72, 187, 120, 0.3)';
                     
                     headerButtons.innerHTML = `
-                        <button onclick="window.location.href='/'" style="background: rgba(255,255,255,0.2); color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; transition: all 0.3s;" onmouseover="this.style.background='rgba(255,255,255,0.3)'" onmouseout="this.style.background='rgba(255,255,255,0.2)'">
+                        <a href="/" style="background: rgba(255,255,255,0.2); color: white; text-decoration: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; transition: all 0.3s; display: inline-block;" onmouseover="this.style.background='rgba(255,255,255,0.3)'" onmouseout="this.style.background='rgba(255,255,255,0.2)'">
                             🏠 Home
-                        </button>
+                        </a>
                         <button onclick="window.open('/districts', '_blank')" style="background: rgba(255,255,255,0.2); color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; transition: all 0.3s;" onmouseover="this.style.background='rgba(255,255,255,0.3)'" onmouseout="this.style.background='rgba(255,255,255,0.2)'">
                             📍 64 District Maps
                         </button>
-                        <button onclick="window.location.href='/logout'" style="background: rgba(245, 101, 101, 0.3); color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; transition: all 0.3s;" onmouseover="this.style.background='rgba(245, 101, 101, 0.5)'" onmouseout="this.style.background='rgba(245, 101, 101, 0.3)'">
+                        <a href="/logout" style="background: rgba(245, 101, 101, 0.3); color: white; text-decoration: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; transition: all 0.3s; display: inline-block;" onmouseover="this.style.background='rgba(245, 101, 101, 0.5)'" onmouseout="this.style.background='rgba(245, 101, 101, 0.3)'">
                             🚪 Logout
-                        </button>
+                        </a>
                     `;
                 }
             } catch (error) {

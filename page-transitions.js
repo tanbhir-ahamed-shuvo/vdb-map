@@ -1,6 +1,7 @@
 /**
  * Smooth Page Transitions Handler
  * Provides fade-in/fade-out animations and loading states
+ * Preserves browser history and back button functionality
  */
 
 // Create page transition overlay
@@ -89,18 +90,12 @@ function initPageTransitions() {
 }
 
 // Show page transition
-function showPageTransition(callback) {
+function showPageTransition() {
     const overlay = document.getElementById('page-transition-overlay');
     const spinner = document.getElementById('page-loading-spinner');
     
     if (overlay) overlay.style.opacity = '0.7';
     if (spinner) spinner.style.opacity = '1';
-    
-    if (callback) {
-        setTimeout(callback, 200);
-    }
-    
-    return () => hidePageTransition();
 }
 
 // Hide page transition
@@ -112,27 +107,12 @@ function hidePageTransition() {
     if (spinner) spinner.style.opacity = '0';
 }
 
-// Navigate to page with transition
-function navigateWithTransition(url, target = '_self') {
-    const hide = showPageTransition();
-    
-    // Add slight delay for smooth effect
-    setTimeout(() => {
-        if (target === '_blank') {
-            window.open(url, '_blank');
-            hide();
-        } else {
-            window.location.href = url;
-        }
-    }, 300);
-}
-
 // Add fade-in animation to page on load
 function fadeInPage() {
     document.body.classList.add('page-entering');
     hidePageTransition();
     
-    // Animate main content elements
+    // Animate main content elements with staggered effect
     const header = document.querySelector('.header');
     const sidebar = document.querySelector('.sidebar');
     const container = document.querySelector('.container');
@@ -154,48 +134,25 @@ function fadeInPage() {
 document.addEventListener('click', (e) => {
     const link = e.target.closest('a[href]');
     
-    if (link && !link.target && !link.hasAttribute('data-no-transition')) {
+    if (link) {
         const href = link.getAttribute('href');
+        const target = link.getAttribute('target');
+        const hasNoTransition = link.hasAttribute('data-no-transition');
         
-        // Only apply transition for internal links
-        if (href && !href.startsWith('http') && !href.startsWith('//') && href !== '#') {
-            e.preventDefault();
-            navigateWithTransition(href);
+        // Skip transition for:
+        // 1. Links that open in new tabs/windows (target="_blank", etc.)
+        // 2. Links with data-no-transition attribute
+        // 3. External links (http://, https://, //)
+        // 4. Anchor links (#)
+        if (target || hasNoTransition || !href || href.startsWith('http') || href.startsWith('//') || href === '#') {
+            return;
         }
-    }
-});
-
-// Handle button clicks for smooth transitions
-document.addEventListener('click', (e) => {
-    const btn = e.target.closest('button[data-navigate]');
-    
-    if (btn) {
-        const url = btn.getAttribute('data-navigate');
-        const target = btn.getAttribute('data-target') || '_self';
         
-        if (url) {
-            e.preventDefault();
-            navigateWithTransition(url, target);
-        }
+        // Show transition overlay but don't prevent default
+        // Let browser handle navigation naturally (preserves history and back button)
+        showPageTransition();
     }
-});
-
-// Override window.location for smooth transitions
-const originalLocationAssign = window.location.assign.bind(window.location);
-const originalLocationHref = Object.getOwnPropertyDescriptor(Location.prototype, 'href');
-
-Object.defineProperty(window.location, 'href', {
-    set(url) {
-        if (typeof url === 'string' && !url.includes('blob:') && !url.includes('data:')) {
-            navigateWithTransition(url);
-        } else {
-            originalLocationHref.set.call(this, url);
-        }
-    },
-    get() {
-        return originalLocationHref.get.call(this);
-    }
-});
+}, true); // Use capture phase to ensure we catch the event
 
 // Initialize on DOM ready
 if (document.readyState === 'loading') {
@@ -215,11 +172,16 @@ window.addEventListener('load', () => {
 
 // Handle back/forward navigation
 window.addEventListener('pageshow', (e) => {
-    if (e.persisted) {
-        fadeInPage();
-    }
+    // Always hide transition when page shows (including from back button)
+    fadeInPage();
 });
 
 window.addEventListener('pagehide', () => {
+    // Show transition when leaving page
+    showPageTransition();
+});
+
+// Show transition when user navigates (e.g., typing URL, clicking back button in future)
+window.addEventListener('beforeunload', () => {
     showPageTransition();
 });
