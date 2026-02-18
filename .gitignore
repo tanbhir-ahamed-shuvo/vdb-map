@@ -39,8 +39,6 @@ wheels/
 Thumbs.db
 
 # Outputs (commit initial maps for Render deployment)
-outputs/districts/*.pdf
-outputs/districts/*.png
 
 # Temporary files and logs
 *.log
