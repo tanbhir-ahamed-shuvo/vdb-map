@@ -98,9 +98,9 @@ def generate_geojson_from_csv(base_dir: Path) -> bool:
             filepath = output_dir / filename
             with open(filepath, 'w', encoding='utf-8') as f:
                 json.dump(updated, f)
-            print(f"✓ Updated {filename}")
+            print(f"[OK] Updated {filename}")
         
-        print("✓ GeoJSON update complete")
+        print("[OK] GeoJSON update complete")
         return True
         
     except Exception as e:

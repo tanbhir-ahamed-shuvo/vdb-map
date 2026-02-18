@@ -14,6 +14,16 @@ from functools import wraps
 import pandas as pd
 from flask import Flask, jsonify, request, send_from_directory, Response, session, redirect, url_for, render_template_string
 
+# Try to import Python GeoJSON generator (available for Render fallback)
+try:
+    from geojson_generator import generate_geojson_from_csv
+    GEOJSON_GENERATOR_AVAILABLE = True
+except ImportError:
+    GEOJSON_GENERATOR_AVAILABLE = False
+    def generate_geojson_from_csv(*args, **kwargs):
+        return False
+
+
 BASE_DIR = Path(__file__).resolve().parent
 OUTPUT_DIR = BASE_DIR / "outputs"
 OUTPUT_DIR.mkdir(exist_ok=True)
@@ -220,13 +230,13 @@ def generate() -> Any:
                 f.write("Region,District,Thana\n")
                 for region, district, thana in output_rows:
                     f.write(f"{region},{district},{thana}\n")
-            log_debug(f"✓ CSV written successfully to {csv_path}")
+            log_debug(f"[OK] CSV written successfully to {csv_path}")
             
             # Verify CSV was written
             with csv_path.open("r", encoding="utf-8") as f:
                 csv_content = f.read()
                 line_count = len(csv_content.split("\n")) - 1
-            log_debug(f"✓ CSV verification: {line_count} records (including header)")
+            log_debug(f"[OK] CSV verification: {line_count} records (including header)")
             
         except Exception as e:
             log_debug(f"ERROR writing CSV: {str(e)}")
@@ -318,14 +328,14 @@ def generate() -> Any:
             log_debug(f"PNG logo return code: {png_result.returncode}")
             
             logo_success = pdf_result.returncode == 0 and png_result.returncode == 0
-            log_debug(f"✓ Logo addition complete - success: {logo_success}")
+            log_debug(f"[OK] Logo addition complete - success: {logo_success}")
             
         except subprocess.TimeoutExpired:
             log_debug("ERROR: Logo addition timed out")
-            logo_output += "\n⚠ Logo addition timed out\n"
+            logo_output += "\n[WARN] Logo addition timed out\n"
         except Exception as e:
             log_debug(f"ERROR in logo addition: {str(e)}")
-            logo_output += f"\n⚠ Logo addition error: {str(e)}\n"
+            logo_output += f"\n[WARN] Logo addition error: {str(e)}\n"
             import traceback
             logo_output += traceback.format_exc()
 
@@ -339,7 +349,7 @@ def generate() -> Any:
                 text=True,
                 check=False,
                 timeout=30,
-            )
+            )    
             log_debug(f"GeoJSON regeneration return code: {geojson_result.returncode}")
             if geojson_result.stdout:
                 log_debug(f"GeoJSON stdout: {geojson_result.stdout[:200]}")
@@ -347,26 +357,25 @@ def generate() -> Any:
             # If R fails, fall back to Python GeoJSON generator
             if geojson_result.returncode != 0:
                 log_debug("R GeoJSON generation failed, trying Python fallback")
-                try:
-                    from geojson_generator import generate_geojson_from_csv
+                if GEOJSON_GENERATOR_AVAILABLE:
                     if generate_geojson_from_csv(BASE_DIR):
-                        log_debug("✓ Python GeoJSON generator successful")
+                        log_debug("[OK] Python GeoJSON generator successful")
                     else:
-                        log_debug("⚠ Python GeoJSON generator also failed")
-                except Exception as py_err:
-                    log_debug(f"Python GeoJSON error: {str(py_err)}")
+                        log_debug("[WARN] Python GeoJSON generator also failed")
+                else:
+                    log_debug("[WARN] Python GeoJSON generator not available")
                     
         except Exception as e:
             log_debug(f"ERROR regenerating GeoJSON via R: {str(e)}")
             # Try Python fallback
-            try:
-                from geojson_generator import generate_geojson_from_csv
+            if GEOJSON_GENERATOR_AVAILABLE:
+                log_debug("Trying Python GeoJSON generator fallback...")
                 if generate_geojson_from_csv(BASE_DIR):
-                    log_debug("✓ Python GeoJSON generator successful (fallback)")
+                    log_debug("[OK] Python GeoJSON generator successful (fallback)")
                 else:
-                    log_debug("⚠ Python GeoJSON generator also failed")
-            except Exception as py_err:
-                log_debug(f"Python GeoJSON fallback error: {str(py_err)}")
+                    log_debug("[WARN] Python GeoJSON generator also failed")
+            else:
+                log_debug("[WARN] Python GeoJSON generator not available")
 
         log_debug(f"\nGeneration complete. Logo success: {logo_success}")
         log_debug("=" * 70)
@@ -571,28 +580,25 @@ def reset_to_original() -> Any:
                 timeout=30,
             )
             if geojson_result.returncode != 0:
-                logo_output += f"\n⚠ GeoJSON regeneration via R failed, trying Python fallback...\n"
-                # Fall back to Python GeoJSON generator
-                try:
-                    from geojson_generator import generate_geojson_from_csv
+                log_debug("GeoJSON regeneration via R failed, trying Python fallback...")
+                if GEOJSON_GENERATOR_AVAILABLE:
                     if generate_geojson_from_csv(BASE_DIR):
-                        logo_output += "✓ Python GeoJSON generator successful\n"
+                        logo_output += "[OK] Python GeoJSON generator successful\n"
                     else:
-                        logo_output += "⚠ Python GeoJSON generator failed\n"
-                except Exception as py_err:
-                    logo_output += f"Python GeoJSON error: {str(py_err)}\n"
+                        logo_output += "[WARN] Python GeoJSON generator failed\n"
+                else:
+                    logo_output += "[WARN] Python GeoJSON generator not available\n"
             else:
-                logo_output += "✓ GeoJSON regenerated via R\n"
+                logo_output += "[OK] GeoJSON regenerated via R\n"
         except Exception as e:
             logo_output += f"\nGeoJSON regeneration error: {str(e)}\nTrying Python fallback...\n"
-            try:
-                from geojson_generator import generate_geojson_from_csv
+            if GEOJSON_GENERATOR_AVAILABLE:
                 if generate_geojson_from_csv(BASE_DIR):
-                    logo_output += "✓ Python GeoJSON generator successful (fallback)\n"
+                    logo_output += "[OK] Python GeoJSON generator successful (fallback)\n"
                 else:
-                    logo_output += "⚠ Python GeoJSON generator failed\n"
-            except Exception as py_err:
-                logo_output += f"Python GeoJSON fallback error: {str(py_err)}\n"
+                    logo_output += "[WARN] Python GeoJSON generator failed\n"
+            else:
+                logo_output += "[WARN] Python GeoJSON generator not available\n"
         
         return jsonify({
             "success": True,
