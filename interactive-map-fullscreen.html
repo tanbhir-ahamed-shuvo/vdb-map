@@ -206,13 +206,43 @@
         }
         
         @media (max-width: 768px) {
+            body {
+                overflow: hidden;
+            }
+
             .container {
-                grid-template-columns: 1fr;
-                height: auto;
+                grid-template-columns: 30% 70%;
+                height: 100vh;
             }
             
             .sidebar {
-                height: auto;
+                height: 100%;
+                max-height: none;
+                padding: 10px;
+                gap: 10px;
+            }
+
+            #map {
+                height: 100%;
+                min-height: 100vh;
+            }
+
+            .zoom-level-badge {
+                bottom: 12px;
+                right: 12px;
+                font-size: 0.8em;
+                padding: 8px 10px;
+            }
+
+            .sidebar h3 {
+                font-size: 0.8em;
+                margin-bottom: 6px;
+            }
+
+            .btn,
+            select {
+                font-size: 0.8em;
+                padding: 8px;
             }
         }
         
@@ -269,9 +299,72 @@
             background: rgba(252, 129, 129, 0.9);
             transform: scale(1.05);
         }
+
+        .mobile-menu-btn {
+            display: none;
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            background: rgba(0,0,0,0.8);
+            color: white;
+            border: 2px solid #81e6d9;
+            padding: 10px 14px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.9em;
+            z-index: 1002;
+            transition: all 0.3s;
+        }
+
+        .mobile-menu-btn:hover {
+            background: rgba(49, 151, 149, 0.95);
+        }
+
+        .container.mobile-sidebar-hidden {
+            grid-template-columns: 0 100% !important;
+        }
+
+        .container.mobile-sidebar-hidden .sidebar {
+            width: 0;
+            padding: 0;
+            opacity: 0;
+            pointer-events: none;
+            overflow: hidden;
+        }
+
+        .container.mobile-sidebar-hidden #map {
+            width: 100%;
+        }
+
+        @media (max-width: 768px) {
+            .mobile-menu-btn {
+                display: block;
+                top: 14px;
+                left: 14px;
+                padding: 8px 10px;
+                font-size: 0.8em;
+            }
+
+            .close-fullscreen-btn {
+                top: 14px;
+                right: 14px;
+                padding: 8px 10px;
+                font-size: 0.8em;
+            }
+
+            .container {
+                transition: grid-template-columns 0.25s ease;
+            }
+
+            .sidebar {
+                transition: all 0.25s ease;
+            }
+        }
     </style>
 </head>
 <body>
+    <button id="mobileMenuBtn" class="mobile-menu-btn" onclick="toggleMobileSidebar()">☰ Menu</button>
     <button class="close-fullscreen-btn" onclick="window.close(); if(!window.closed) window.location.href='/map'">✕ Close Full View</button>
     
     <!-- Admin Login Badge in Top Right -->
@@ -350,6 +443,49 @@
         const THANA_ZOOM = 10;
 
         let map = null;
+        let mobileSidebarInitialized = false;
+
+        function isMobileView() {
+            return window.matchMedia('(max-width: 768px)').matches;
+        }
+
+        function getMainContainer() {
+            return document.querySelector('.container');
+        }
+
+        function toggleMobileSidebar() {
+            if (!isMobileView()) return;
+
+            const container = getMainContainer();
+            const menuBtn = document.getElementById('mobileMenuBtn');
+            if (!container || !menuBtn) return;
+
+            const isHidden = container.classList.toggle('mobile-sidebar-hidden');
+            menuBtn.textContent = isHidden ? '☰ Menu' : '✕ Hide';
+
+            setTimeout(() => {
+                if (map) {
+                    map.invalidateSize();
+                }
+            }, 260);
+        }
+
+        function setupMobileSidebarDefault() {
+            const container = getMainContainer();
+            const menuBtn = document.getElementById('mobileMenuBtn');
+            if (!container || !menuBtn) return;
+
+            if (isMobileView()) {
+                if (!mobileSidebarInitialized) {
+                    container.classList.add('mobile-sidebar-hidden');
+                    menuBtn.textContent = '☰ Menu';
+                    mobileSidebarInitialized = true;
+                }
+            } else {
+                container.classList.remove('mobile-sidebar-hidden');
+                mobileSidebarInitialized = false;
+            }
+        }
         
         // Initialize map when DOM is ready
         function createMap() {
@@ -953,6 +1089,8 @@
 
         async function initializeMap() {
             try {
+                setupMobileSidebarDefault();
+
                 // Create map first
                 createMap();
                 
@@ -982,9 +1120,18 @@
         
         // Handle window resize
         window.addEventListener('resize', () => {
+            setupMobileSidebarDefault();
             if (map) {
                 map.invalidateSize();
             }
+        });
+
+        window.addEventListener('orientationchange', () => {
+            setTimeout(() => {
+                if (map) {
+                    map.invalidateSize();
+                }
+            }, 250);
         });
     </script>
     <script src="/page-transitions.js"></script>
