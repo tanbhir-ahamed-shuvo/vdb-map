@@ -250,7 +250,7 @@
                 <button onclick="forceRefreshMaps()" class="btn btn-warning" style="padding: 10px 20px; background: #ed8936;">
                     🔄 Force Refresh Maps
                 </button>
-                <button onclick="window.location.href='/'" class="btn btn-secondary" style="padding: 10px 20px;">
+                <button onclick="goHome()" class="btn btn-secondary" style="padding: 10px 20px;">
                     🏠 Home
                 </button>
                 <button onclick="location.reload(true)" class="btn btn-primary" style="padding: 10px 20px;">
@@ -301,7 +301,7 @@
                 District maps will be created when you generate updated maps from the main interface.
             </p>
             <div style="display: flex; gap: 15px; justify-content: center; flex-wrap: wrap;">
-                <button onclick="window.location.href='/'" class="btn btn-primary" style="padding: 15px 30px; font-size: 1.1em;">
+                <button onclick="goHome()" class="btn btn-primary" style="padding: 15px 30px; font-size: 1.1em;">
                     🏠 Go to Main Interface
                 </button>
                 <button onclick="generateFromHere()" class="btn btn-secondary" style="padding: 15px 30px; font-size: 1.1em;">
@@ -329,6 +329,24 @@
     <script>
         let districts = [];
         let currentIndex = 0;
+        let homeTarget = '/map';
+
+        function goHome() {
+            window.location.href = homeTarget;
+        }
+
+        async function setHomeTargetByAuth() {
+            try {
+                const response = await fetch('/check_auth');
+                if (response.ok) {
+                    homeTarget = '/';
+                } else {
+                    homeTarget = '/map';
+                }
+            } catch (error) {
+                homeTarget = '/map';
+            }
+        }
 
         // Fetch list of districts from the server
         async function loadDistricts() {
@@ -485,8 +503,10 @@
             }
         });
 
-        // Load districts on page load
-        loadDistricts();
+        // Initialize auth-based home target, then load districts
+        setHomeTargetByAuth().finally(() => {
+            loadDistricts();
+        });
     </script>
     <script src="/page-transitions.js"></script>
 </body>

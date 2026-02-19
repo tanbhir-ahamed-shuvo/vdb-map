@@ -300,6 +300,7 @@
             transform: scale(1.05);
         }
 
+
         .mobile-menu-btn {
             display: none;
             position: fixed;
@@ -366,13 +367,6 @@
 <body>
     <button id="mobileMenuBtn" class="mobile-menu-btn" onclick="toggleMobileSidebar()">☰ Menu</button>
     <button class="close-fullscreen-btn" onclick="window.close(); if(!window.closed) window.location.href='/map'">✕ Close Full View</button>
-    
-    <!-- Admin Login Badge in Top Right -->
-    <div style="position: fixed; top: 15px; right: 80px; z-index: 1001; background: rgba(0,0,0,0.7); padding: 8px 15px; border-radius: 8px; backdrop-filter: blur(10px);">
-        <a href="/login" style="color: white; text-decoration: none; font-weight: 600; font-size: 0.9em;">
-            🔐 Admin Login
-        </a>
-    </div>
     
     <div class="container">
         <div class="sidebar">
