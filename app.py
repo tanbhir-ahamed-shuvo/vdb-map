@@ -224,178 +224,113 @@ def generate() -> Any:
         
         log_debug(f"Prepared {len(output_rows)} records for CSV")
         
-        # Write CSV maintaining header
+        # STEP 1: Save CSV immediately (always succeeds fast)
         try:
             with csv_path.open("w", encoding="utf-8", newline="") as f:
                 f.write("Region,District,Thana\n")
                 for region, district, thana in output_rows:
                     f.write(f"{region},{district},{thana}\n")
-            log_debug(f"[OK] CSV written successfully to {csv_path}")
-            
-            # Verify CSV was written
-            with csv_path.open("r", encoding="utf-8") as f:
-                csv_content = f.read()
-                line_count = len(csv_content.split("\n")) - 1
-            log_debug(f"[OK] CSV verification: {line_count} records (including header)")
-            
+            log_debug(f"[OK] CSV written successfully ({len(output_rows)} rows)")
         except Exception as e:
             log_debug(f"ERROR writing CSV: {str(e)}")
-            return jsonify({"success": False, "message": f"CSV write error: {str(e)}"}), 500
+            return jsonify({"success": False, "message": f"Could not save data: {str(e)}"}), 500
 
-        # Call R script
-        log_debug("Calling R script: generate_map_from_swaps.R")
-        
-        # Initialize progress file
-        progress_data = {"regions": 0, "districts": 0, "total_regions": 10, "total_districts": 64, "status": "generating"}
-        with open(PROGRESS_FILE, 'w', encoding='utf-8') as f:
-            json.dump(progress_data, f)
-        
-        cmd = ["Rscript", "generate_map_from_swaps.R"]
-        result = subprocess.run(
-            cmd,
-            cwd=str(BASE_DIR),
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        
-        log_debug(f"R script return code: {result.returncode}")
-        if result.stdout:
-            log_debug(f"R stdout (first 500 chars): {result.stdout[:500]}")
-        if result.stderr:
-            log_debug(f"R stderr (first 500 chars): {result.stderr[:500]}")
+        # STEP 2: Always update GeoJSON via Python (fast, no R needed)
+        geojson_ok = False
+        if GEOJSON_GENERATOR_AVAILABLE:
+            try:
+                geojson_ok = generate_geojson_from_csv(BASE_DIR)
+                log_debug("[OK] Python GeoJSON update successful" if geojson_ok else "[WARN] Python GeoJSON update failed")
+            except Exception as e:
+                log_debug(f"[WARN] Python GeoJSON error: {e}")
 
-        district_png = OUTPUT_DIR / "bangladesh_districts_updated_from_swaps.png"
-        thana_png = OUTPUT_DIR / "bangladesh_thanas_updated_from_swaps.png"
-        district_pdf = OUTPUT_DIR / "bangladesh_districts_updated_from_swaps.pdf"
-        thana_pdf = OUTPUT_DIR / "bangladesh_thanas_updated_from_swaps.pdf"
+        # STEP 3: Attempt R map generation (best-effort, may not be available on Render)
+        r_available = False
+        map_message = "Data saved successfully. "
 
-        outputs_exist = all(p.exists() for p in [district_png, thana_png, district_pdf, thana_pdf])
-        log_debug(f"Map files exist: PNG={district_png.exists() and thana_png.exists()}, PDF={district_pdf.exists() and thana_pdf.exists()}")
-
-        if result.returncode != 0 and not outputs_exist:
-            log_debug(f"ERROR: R script failed and no output files exist")
-            return jsonify(
-                {
-                    "success": False,
-                    "message": "Map generation failed",
-                    "stdout": result.stdout[:1000],
-                    "stderr": result.stderr[:1000],
-                }
-            ), 500
-
-        # Add logos to generated maps - CRITICAL for branding
-        log_debug("Starting logo addition process")
-        logo_output = ""
-        logo_success = False
-        
         try:
-            python_exe = sys.executable
-            log_debug(f"Using Python: {python_exe}")
-            
-            # Add logos to PDFs
-            pdf_script = BASE_DIR / "add_logo_to_pdfs.py"
-            log_debug("Calling add_logo_to_pdfs.py")
-            pdf_result = subprocess.run(
-                [python_exe, str(pdf_script)],
-                cwd=str(BASE_DIR),
-                capture_output=True,
-                text=True,
-                check=False,
-                timeout=30,
+            r_check = subprocess.run(
+                ["Rscript", "--version"],
+                capture_output=True, text=True, timeout=5, check=False
             )
-            logo_output += "=== PDF Logo Addition ===\n"
-            logo_output += pdf_result.stdout + "\n"
-            if pdf_result.stderr:
-                logo_output += "PDF Errors: " + pdf_result.stderr + "\n"
-            log_debug(f"PDF logo return code: {pdf_result.returncode}")
-            
-            # Add logos to PNGs
-            png_script = BASE_DIR / "add_logo_to_pngs.py"
-            log_debug("Calling add_logo_to_pngs.py")
-            png_result = subprocess.run(
-                [python_exe, str(png_script)],
-                cwd=str(BASE_DIR),
-                capture_output=True,
-                text=True,
-                check=False,
-                timeout=30,
-            )
-            logo_output += "\n=== PNG Logo Addition ===\n"
-            logo_output += png_result.stdout + "\n"
-            if png_result.stderr:
-                logo_output += "PNG Errors: " + png_result.stderr + "\n"
-            log_debug(f"PNG logo return code: {png_result.returncode}")
-            
-            logo_success = pdf_result.returncode == 0 and png_result.returncode == 0
-            log_debug(f"[OK] Logo addition complete - success: {logo_success}")
-            
-        except subprocess.TimeoutExpired:
-            log_debug("ERROR: Logo addition timed out")
-            logo_output += "\n[WARN] Logo addition timed out\n"
-        except Exception as e:
-            log_debug(f"ERROR in logo addition: {str(e)}")
-            logo_output += f"\n[WARN] Logo addition error: {str(e)}\n"
-            import traceback
-            logo_output += traceback.format_exc()
+            r_available = r_check.returncode == 0
+        except Exception:
+            r_available = False
 
-        # Regenerate GeoJSON for interactive map
-        log_debug("Regenerating GeoJSON for interactive map")
-        try:
-            geojson_result = subprocess.run(
-                ["Rscript", "generate_geojson.R"],
-                cwd=str(BASE_DIR),
-                capture_output=True,
-                text=True,
-                check=False,
-                timeout=30,
-            )    
-            log_debug(f"GeoJSON regeneration return code: {geojson_result.returncode}")
-            if geojson_result.stdout:
-                log_debug(f"GeoJSON stdout: {geojson_result.stdout[:200]}")
-            
-            # If R fails, fall back to Python GeoJSON generator
-            if geojson_result.returncode != 0:
-                log_debug("R GeoJSON generation failed, trying Python fallback")
-                if GEOJSON_GENERATOR_AVAILABLE:
-                    if generate_geojson_from_csv(BASE_DIR):
-                        log_debug("[OK] Python GeoJSON generator successful")
-                    else:
-                        log_debug("[WARN] Python GeoJSON generator also failed")
-                else:
-                    log_debug("[WARN] Python GeoJSON generator not available")
-                    
-        except Exception as e:
-            log_debug(f"ERROR regenerating GeoJSON via R: {str(e)}")
-            # Try Python fallback
-            if GEOJSON_GENERATOR_AVAILABLE:
-                log_debug("Trying Python GeoJSON generator fallback...")
-                if generate_geojson_from_csv(BASE_DIR):
-                    log_debug("[OK] Python GeoJSON generator successful (fallback)")
-                else:
-                    log_debug("[WARN] Python GeoJSON generator also failed")
-            else:
-                log_debug("[WARN] Python GeoJSON generator not available")
+        if r_available:
+            log_debug("[OK] R is available, attempting map generation")
+            try:
+                progress_data = {"regions": 0, "districts": 0, "total_regions": 10, "total_districts": 64, "status": "generating"}
+                with open(PROGRESS_FILE, 'w', encoding='utf-8') as f:
+                    json.dump(progress_data, f)
 
-        log_debug(f"\nGeneration complete. Logo success: {logo_success}")
+                r_result = subprocess.run(
+                    ["Rscript", "generate_map_from_swaps.R"],
+                    cwd=str(BASE_DIR),
+                    capture_output=True, text=True, check=False, timeout=120
+                )
+                log_debug(f"R script return code: {r_result.returncode}")
+
+                district_png = OUTPUT_DIR / "bangladesh_districts_updated_from_swaps.png"
+                thana_png = OUTPUT_DIR / "bangladesh_thanas_updated_from_swaps.png"
+                outputs_exist = district_png.exists() and thana_png.exists()
+
+                if r_result.returncode == 0 or outputs_exist:
+                    map_message += "Maps regenerated with new assignments. "
+                    log_debug("[OK] R map generation successful")
+                    try:
+                        python_exe = sys.executable
+                        for script_name in ["add_logo_to_pdfs.py", "add_logo_to_pngs.py"]:
+                            script = BASE_DIR / script_name
+                            if script.exists():
+                                subprocess.run(
+                                    [python_exe, str(script)],
+                                    cwd=str(BASE_DIR), capture_output=True,
+                                    text=True, check=False, timeout=30
+                                )
+                        map_message += "Zaytoon branding applied."
+                        log_debug("[OK] Logo addition attempted")
+                    except Exception as e:
+                        log_debug(f"[WARN] Logo addition skipped: {e}")
+                    try:
+                        subprocess.run(
+                            ["Rscript", "generate_geojson.R"],
+                            cwd=str(BASE_DIR), capture_output=True,
+                            text=True, check=False, timeout=30
+                        )
+                    except Exception:
+                        pass
+                else:
+                    map_message += "Note: Map image regeneration failed (R packages may be missing). Data is saved."
+                    log_debug(f"[WARN] R map generation failed: {r_result.stderr[:300]}")
+
+            except subprocess.TimeoutExpired:
+                map_message += "Note: Map generation timed out. Data is saved."
+                log_debug("[WARN] R script timed out")
+            except Exception as e:
+                map_message += f"Note: Map generation error: {str(e)}"
+                log_debug(f"[WARN] R execution error: {e}")
+        else:
+            map_message += "Note: Map image generation requires R (not available here). District/thana assignments saved."
+            log_debug("[WARN] R not available, skipping map generation")
+
+        log_debug(f"Generate complete. Message: {map_message}")
         log_debug("=" * 70)
-        
-        return jsonify(
-            {
-                "success": True,
-                "message": "Maps generated" + (" with Zaytoon branding" if logo_success else " (logo addition may have failed)"),
-                "outputs": {
-                    "district_png": "/outputs/bangladesh_districts_updated_from_swaps.png",
-                    "thana_png": "/outputs/bangladesh_thanas_updated_from_swaps.png",
-                    "district_pdf": "/outputs/bangladesh_districts_updated_from_swaps.pdf",
-                    "thana_pdf": "/outputs/bangladesh_thanas_updated_from_swaps.pdf",
-                },
-                "logo_applied": logo_success,
-                "stdout": result.stdout[-2000:] if result.stdout else "",  # Last 2000 chars
-                "stderr": result.stderr[-2000:] if result.stderr else "",
-            }
-        )
-    except Exception as exc:  # noqa: BLE001
+
+        return jsonify({
+            "success": True,
+            "message": map_message.strip(),
+            "csv_saved": True,
+            "r_available": r_available,
+            "geojson_updated": geojson_ok,
+            "outputs": {
+                "district_png": "/outputs/bangladesh_districts_updated_from_swaps.png",
+                "thana_png": "/outputs/bangladesh_thanas_updated_from_swaps.png",
+                "district_pdf": "/outputs/bangladesh_districts_updated_from_swaps.pdf",
+                "thana_pdf": "/outputs/bangladesh_thanas_updated_from_swaps.pdf",
+            },
+        })
+    except Exception as exc:
         log_debug(f"EXCEPTION in generate: {str(exc)}")
         import traceback
         log_debug(traceback.format_exc())

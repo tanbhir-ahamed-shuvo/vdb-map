@@ -264,9 +264,10 @@
 
     <div class="modal" id="processingModal">
         <div class="modal-content">
-            <h3>⏳ Generating Map...</h3>
-            <p>Processing your changes and creating updated map. This may take a few moments.</p>
-            <div style="color: #667eea; font-size: 2em; animation: spin 1s linear infinite; margin-top: 20px;">⏳</div>
+            <h3>🗺️ Generating Map...</h3>
+            <p id="modalStatusText">Processing your changes and creating updated map. This may take up to 60 seconds.</p>
+            <div style="margin: 20px auto; width: 48px; height: 48px; border: 5px solid #e2e8f0; border-top-color: #667eea; border-radius: 50%; animation: spin 0.9s linear infinite;"></div>
+            <button onclick="cancelGenerate()" style="margin-top:16px; padding:8px 24px; background:#f56565; color:white; border:none; border-radius:6px; cursor:pointer; font-weight:600; font-size:0.9em;">✕ Cancel</button>
         </div>
     </div>
 
@@ -288,8 +289,9 @@
         let originalStructure = {};
         let changeLog = [];
         let dragData = { type: null, region: null, district: null, thana: null };
-        let autoUpdate = true;
+        let autoUpdate = false;  // Disabled by default — use "Generate Updated Map" button manually
         let pendingTimer = null;
+        let generateAbortController = null;  // For cancelling in-flight generate requests
 
         // PDF Viewer Variables
         let pdfDocument = null;
@@ -1081,7 +1083,7 @@ Sylhet	Sylhet	Zakiganj`;
 
         function generateNewMap(silent) {
             if (changeLog.length === 0 && !silent) {
-                showNotif('No changes made. Make swaps first!');
+                showNotif('⚠️ No changes made yet — drag a district to a different region first!');
                 return;
             }
 
@@ -1094,46 +1096,81 @@ Sylhet	Sylhet	Zakiganj`;
                 });
             });
 
-            showModal(true);
-            
+            // Only show the blocking modal for MANUAL generate button clicks (not silent auto-update)
+            if (!silent) {
+                showModal(true);
+                const statusEl = document.getElementById('modalStatusText');
+                if (statusEl) statusEl.textContent = 'Saving changes and generating updated maps...';
+            }
+
+            // Cancel any in-flight request first
+            if (generateAbortController) generateAbortController.abort();
+            generateAbortController = new AbortController();
+            const timeoutId = setTimeout(() => generateAbortController.abort(), 90000); // 90s timeout
+
             fetch('/generate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(data)
+                credentials: 'same-origin',
+                body: JSON.stringify(data),
+                signal: generateAbortController.signal
             })
-            .then(r => r.json())
+            .then(r => {
+                clearTimeout(timeoutId);
+                if (r.status === 401) throw new Error('AUTH_REQUIRED');
+                if (!r.ok) throw new Error('Server error: ' + r.status);
+                return r.json();
+            })
             .then(result => {
-                showModal(false);
+                if (!silent) showModal(false);
+                generateAbortController = null;
                 if (result.success) {
                     refreshMaps();
-                    if (!silent) showNotif('✓ Updated maps generated!');
-                    // Reload CSV data from server to get any corrections applied by backend
+                    showNotif('✅ ' + (result.message || 'Maps updated successfully!'));
                     reloadCsvData();
                     // Signal interactive map to reload GeoJSON
-                    const updateData = {timestamp: Date.now()};
-                    localStorage.setItem('geojsonUpdated', JSON.stringify(updateData));
-                    // Broadcast to other tabs via BroadcastChannel
                     try {
+                        localStorage.setItem('geojsonUpdated', JSON.stringify({timestamp: Date.now()}));
                         const mapChannel = new BroadcastChannel('map-updates');
                         mapChannel.postMessage({type: 'geojson-updated'});
                         mapChannel.close();
-                    } catch (e) {
-                        console.log('BroadcastChannel not supported');
-                    }
+                    } catch (e) {}
                 } else {
-                    showNotif(`⚠ ${result.message || 'Map generation failed'}`);
+                    const msg = result.message || 'Map generation failed';
+                    showNotif('⚠️ ' + msg);
+                    console.warn('Generate failed:', result);
                 }
             })
-            .catch(() => {
-                showModal(false);
-                showNotif('⚠ Backend not running. Start server: python app.py');
+            .catch(err => {
+                clearTimeout(timeoutId);
+                if (!silent) showModal(false);
+                generateAbortController = null;
+                if (err.name === 'AbortError') {
+                    showNotif('⏱️ Request timed out. The server is still processing — check back in a moment.');
+                } else if (err.message === 'AUTH_REQUIRED') {
+                    showNotif('🔐 Session expired — please login again.');
+                    setTimeout(() => window.location.href = '/login', 2000);
+                } else {
+                    showNotif('❌ Error: ' + err.message);
+                    console.error('Generate error:', err);
+                }
             });
+        }
+
+        function cancelGenerate() {
+            if (generateAbortController) {
+                generateAbortController.abort();
+                generateAbortController = null;
+            }
+            showModal(false);
+            showNotif('⚠️ Map generation cancelled.');
         }
 
         function scheduleGenerate() {
             if (!autoUpdate) return;
             if (pendingTimer) clearTimeout(pendingTimer);
-            pendingTimer = setTimeout(() => generateNewMap(true), 800);
+            // Silent background save without blocking UI modal
+            pendingTimer = setTimeout(() => generateNewMap(true), 1500);
         }
 
         function refreshMaps() {
