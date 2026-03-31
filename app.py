@@ -66,9 +66,10 @@ def login_required(f):
 
 @app.after_request
 def add_header(response):
-    """Add headers to disable caching for map images."""
-    if request.path.startswith('/outputs/'):
-        response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, post-check=0, pre-check=0, max-age=0'
+    """Add headers to disable caching for map images, GeoJSON, and CSV."""
+    no_cache_paths = ('/outputs/', '/geojson/', '/region_swapped_data.csv')
+    if any(request.path.startswith(p) or request.path == p for p in no_cache_paths):
+        response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
         response.headers['Pragma'] = 'no-cache'
         response.headers['Expires'] = '-1'
     return response
@@ -143,7 +144,12 @@ def interactive_map_fullscreen() -> Any:
 
 @app.route("/geojson/<path:filename>")
 def geojson_files(filename: str) -> Any:
-    return send_from_directory(BASE_DIR / "geojson", filename)
+    """Serve GeoJSON files with no-cache headers so map always reflects latest changes."""
+    response = send_from_directory(BASE_DIR / "geojson", filename)
+    response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '-1'
+    return response
 
 
 @app.route("/progress")

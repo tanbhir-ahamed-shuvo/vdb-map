@@ -536,33 +536,36 @@
         }
 
         async function loadGeoJson() {
-            const ts = Date.now();
-            const responses = await Promise.all([
-                fetch(`/geojson/regions.geojson?t=${ts}`),
-                fetch(`/geojson/districts.geojson?t=${ts}`),
-                fetch(`/geojson/thanas.geojson?t=${ts}`)
+            // Use a unique timestamp each call to bypass ALL browser caching
+            const ts = Date.now() + '_' + Math.random().toString(36).slice(2);
+            const [r0, r1, r2] = await Promise.all([
+                fetch(`/geojson/regions.geojson?_=${ts}`, {cache: 'no-store'}),
+                fetch(`/geojson/districts.geojson?_=${ts}`, {cache: 'no-store'}),
+                fetch(`/geojson/thanas.geojson?_=${ts}`, {cache: 'no-store'})
             ]);
 
-            if (!responses[0].ok || !responses[1].ok || !responses[2].ok) {
-                throw new Error('GeoJSON files not found');
+            if (!r0.ok || !r1.ok || !r2.ok) {
+                throw new Error('GeoJSON files not found or server error');
             }
 
-            regionsGeo = await responses[0].json();
-            districtsGeo = await responses[1].json();
-            thanasGeo = await responses[2].json();
+            regionsGeo   = await r0.json();
+            districtsGeo = await r1.json();
+            thanasGeo    = await r2.json();
+            console.log(`[OK] GeoJSON loaded: ${regionsGeo.features.length} regions, ${districtsGeo.features.length} districts, ${thanasGeo.features.length} thanas`);
         }
 
         async function reloadGeoJsonData() {
             try {
-                if (!map) {
-                    console.log('Map not initialized yet, skipping reload');
-                    return;
-                }
+                if (!map) return;
+                console.log('[INFO] Reloading GeoJSON from server...');
                 await loadGeoJson();
                 populateSelectors();
                 setMode(currentMode);
+                showUpdateNotification('🗺️ Map updated with new assignments!');
+                console.log('[OK] Map reloaded successfully');
             } catch (error) {
                 console.error('Error reloading GeoJSON:', error);
+                showUpdateNotification('⚠️ Map reload failed — try refreshing the page');
             }
         }
 
