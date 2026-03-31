@@ -35,9 +35,11 @@
         .stat-label { color: #718096; font-size: 0.8em; }
         .region-block { border: 1px solid #e2e8f0; border-radius: 6px; background: white; display: flex; flex-direction: column; box-shadow: 0 1px 6px rgba(0,0,0,0.08); transition: all 0.3s; }
         .region-block:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.12); }
-        .region-header { background: #667eea; color: white; padding: 6px 8px; font-weight: 600; cursor: pointer; display: flex; justify-content: space-between; align-items: center; border-radius: 6px 6px 0 0; font-size: 0.78em; }
+        .region-header { background: #667eea; color: white; padding: 6px 8px; font-weight: 600; cursor: pointer; display: flex; justify-content: space-between; align-items: center; border-radius: 6px 6px 0 0; font-size: 0.78em; user-select: none; }
         .region-header.drag-over { background: #48bb78; box-shadow: 0 0 10px rgba(72, 187, 120, 0.5); }
-        .region-content { padding: 6px; display: none; }
+        .region-header .toggle-arrow { font-size: 0.8em; transition: transform 0.2s; display: inline-block; }
+        .region-header.collapsed .toggle-arrow { transform: rotate(-90deg); }
+        .region-content { padding: 6px; display: block; }
         .district-block { margin-bottom: 4px; background: #f7fafc; padding: 4px 5px; border-radius: 4px; border-left: 2px solid #667eea; cursor: move; font-size: 0.72em; }
         .district-block.dragging { opacity: 0.5; background: #e2e8f0; }
         .district-block.drag-over { background: #bee3f8; border-left-color: #38a169; }
@@ -248,7 +250,14 @@
 
         <!-- Regions Grid Layout (5x2) -->
         <div style="background: white; border-radius: 15px; padding: 20px; box-shadow: 0 8px 32px rgba(0,0,0,0.1);">
-            <h2>Regions & Districts Manager (10×1 Row)</h2>
+            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-bottom: 12px;">
+                <h2 style="margin: 0;">🗺️ Regions & Districts Manager (10×1 Row)</h2>
+                <div style="display: flex; gap: 8px;">
+                    <button onclick="expandAllRegions()" style="padding: 5px 12px; background: #667eea; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 0.82em; font-weight: 600;">▼ Expand All</button>
+                    <button onclick="collapseAllRegions()" style="padding: 5px 12px; background: #718096; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 0.82em; font-weight: 600;">▶ Collapse All</button>
+                </div>
+            </div>
+            <p style="color: #718096; font-size: 0.82em; margin: 0 0 12px 0;">💡 Click any region header to collapse/expand • Drag districts between regions • Click district name to see thanas</p>
             <div class="regions-grid" id="regionsGridContainer"></div>
         </div>
     </div>
@@ -831,15 +840,21 @@ Sylhet	Sylhet	Zakiganj`;
                     header.style.background = regionColors[regionName];
                     header.innerHTML = `
                         <span>${regionName}</span>
-                        <span class="count-badge" style="font-size:0.75em;">${Object.keys(districts).length}D • ${Object.values(districts).reduce((a, b) => a + b.length, 0)}T</span>
+                        <div style="display:flex;align-items:center;gap:6px;">
+                            <span class="count-badge" style="font-size:0.75em;">${Object.keys(districts).length}D · ${Object.values(districts).reduce((a, b) => a + b.length, 0)}T</span>
+                            <span class="toggle-arrow">▼</span>
+                        </div>
                     `;
 
                     const content = document.createElement('div');
                     content.className = 'region-content';
+                    // Auto-expanded by default so districts are always visible
+                    content.style.display = 'block';
 
                     header.onclick = () => {
                         const isOpen = content.style.display === 'block';
                         content.style.display = isOpen ? 'none' : 'block';
+                        header.classList.toggle('collapsed', isOpen);
                     };
 
                     Object.entries(districts).forEach(([districtName, thanas]) => {
@@ -1140,18 +1155,19 @@ Sylhet	Sylhet	Zakiganj`;
 
         async function reloadCsvData() {
             try {
-                const response = await fetch('/region_swapped_data.csv');
+                const response = await fetch('/region_swapped_data.csv?t=' + Date.now());
                 if (response.ok) {
                     const text = await response.text();
-                    // Convert CSV format to TSV format
+                    // Convert CSV format to TSV format — handle both LF and CRLF line endings
                     csvData = text
+                        .replace(/\r\n/g, '\n').replace(/\r/g, '\n')
                         .split('\n')
                         .slice(1) // Skip header
                         .filter(line => line.trim())
                         .map(line => {
                             const parts = line.split(',');
                             if (parts.length >= 3) {
-                                return `${parts[0]}\t${parts[1]}\t${parts[2]}`;
+                                return `${parts[0].trim()}\t${parts[1].trim()}\t${parts[2].trim()}`;
                             }
                             return '';
                         })
@@ -1169,6 +1185,16 @@ Sylhet	Sylhet	Zakiganj`;
                 console.warn('Failed to reload CSV:', e);
             }
             return false;
+        }
+
+        function expandAllRegions() {
+            document.querySelectorAll('.region-content').forEach(c => c.style.display = 'block');
+            document.querySelectorAll('.region-header').forEach(h => h.classList.remove('collapsed'));
+        }
+
+        function collapseAllRegions() {
+            document.querySelectorAll('.region-content').forEach(c => c.style.display = 'none');
+            document.querySelectorAll('.region-header').forEach(h => h.classList.add('collapsed'));
         }
 
         async function resetChanges() {
@@ -1370,22 +1396,23 @@ Sylhet	Sylhet	Zakiganj`;
                     const text = await response.text();
                     // Only use server CSV if it has actual data
                     if (text.trim().length > 0) {
-                        // Convert CSV format to TSV format for parseData
+                        // Convert CSV format to TSV format — handle both CRLF and LF line endings
                         csvData = text
+                            .replace(/\r\n/g, '\n').replace(/\r/g, '\n')
                             .split('\n')
                             .slice(1) // Skip header
                             .filter(line => line.trim())
                             .map(line => {
                                 const parts = line.split(',');
                                 if (parts.length >= 3) {
-                                    return `${parts[0]}\t${parts[1]}\t${parts[2]}`;
+                                    return `${parts[0].trim()}\t${parts[1].trim()}\t${parts[2].trim()}`;
                                 }
                                 return '';
                             })
                             .filter(line => line.trim())
                             .join('\n');
                         csvLoaded = true;
-                        console.log('✓ Loaded corrected CSV from server');
+                        console.log('[OK] Loaded corrected CSV from server (' + csvData.split('\n').length + ' rows)');
                     }
                 }
             } catch (e) {
@@ -1399,7 +1426,7 @@ Sylhet	Sylhet	Zakiganj`;
             updateStats();
             
             if (!csvLoaded) {
-                console.warn('⚠ Using embedded data - corrections may not show. Reload the page to fetch from server.');
+                console.warn('[WARN] Using embedded data - server CSV unavailable.');
             }
 
             const toggle = document.getElementById('autoUpdateToggle');

@@ -46,7 +46,7 @@ def log_debug(message: str) -> None:
         pass
 
 app = Flask(__name__, static_folder="outputs", static_url_path="/outputs")
-app.secret_key = 'zaytoon-map-secret-key-change-in-production'  # Change this in production!
+app.secret_key = os.environ.get('SECRET_KEY', 'zaytoon-map-secret-key-2024-local-dev')
 
 # Simple user credentials (in production, use a database with hashed passwords)
 USERS = {
