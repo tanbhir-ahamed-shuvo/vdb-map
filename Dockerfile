@@ -1,75 +1,67 @@
 # ============================================================================
 # Zaytoon VDB Map — Production Dockerfile
-# Uses r-base so R + system GIS libraries (GDAL, GEOS, PROJ) are pre-installed
+#
+# Uses rocker/geospatial which pre-installs:
+#   - R 4.4.x
+#   - GDAL, GEOS, PROJ system libs  
+#   - sf, terra, sp, ggplot2, dplyr, tmap (all pre-compiled, no build time)
+#
+# Only needs to add: python3, gunicorn, bangladesh R package
 # ============================================================================
-FROM r-base:4.3.3
+FROM rocker/geospatial:4.4.1
 
-# Install system dependencies required for R spatial packages + Python + gunicorn
+# Install Python3 + pip (rocker images are Debian-based)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
     python3-pip \
     python3-dev \
-    libgdal-dev \
-    libgeos-dev \
-    libproj-dev \
-    libudunits2-dev \
-    libcurl4-openssl-dev \
-    libssl-dev \
-    libxml2-dev \
-    libfontconfig1-dev \
-    libfreetype6-dev \
-    libpng-dev \
-    libjpeg-dev \
-    libtiff-dev \
-    libcairo2-dev \
     && rm -rf /var/lib/apt/lists/*
+
+# Install remaining R packages not bundled in rocker/geospatial
+# tmap v3 is available via CRAN; bangladesh is a custom Bangladesh geodata package
+RUN Rscript -e "\
+  options(repos = c(CRAN = 'https://cloud.r-project.org/')); \
+  pkgs_needed <- c('tmap', 'jsonlite', 'bangladesh'); \
+  installed   <- rownames(installed.packages()); \
+  to_install  <- pkgs_needed[!pkgs_needed %in% installed]; \
+  if (length(to_install) > 0) { \
+    cat('Installing:', paste(to_install, collapse=', '), '\n'); \
+    install.packages(to_install, dependencies = TRUE, quiet = FALSE); \
+  } else { \
+    cat('All R packages already present\n'); \
+  } \
+"
 
 # Set working directory
 WORKDIR /app
 
-# Copy requirements and install Python deps first (layer cache)
+# Copy and install Python dependencies first (Docker layer cache)
 COPY requirements.txt /app/
 RUN pip3 install --no-cache-dir --break-system-packages -r requirements.txt
-
-# Install R packages — cached as a separate layer before copying project files
-# Using pak for faster parallel installs
-RUN Rscript -e "\
-  options(repos = c(CRAN = 'https://cloud.r-project.org/')); \
-  pkgs <- c('sf', 'tmap', 'dplyr', 'jsonlite'); \
-  install.packages(pkgs, dependencies = TRUE, quiet = TRUE); \
-  cat('R packages installed:', paste(pkgs, collapse=', '), '\n') \
-"
-
-# Install the 'bangladesh' package from its source (CRAN or GitHub)
-RUN Rscript -e "\
-  options(repos = c(CRAN = 'https://cloud.r-project.org/')); \
-  tryCatch({ \
-    install.packages('bangladesh', dependencies = TRUE, quiet = TRUE); \
-    cat('bangladesh package installed from CRAN\n') \
-  }, error = function(e) { \
-    if (!requireNamespace('remotes', quietly = TRUE)) install.packages('remotes'); \
-    remotes::install_github('ranindu/bangladesh', quiet = TRUE); \
-    cat('bangladesh package installed from GitHub\n') \
-  }) \
-"
 
 # Copy all project files
 COPY . /app
 
-# Create output directories and set permissions
+# Ensure output/geojson directories exist and are writable
 RUN mkdir -p /app/outputs /app/geojson && \
     chmod -R 777 /app/outputs /app/geojson
 
-# Create backup of original CSV
+# Backup original CSV if not already backed up
 RUN if [ -f /app/region_swapped_data.csv ] && [ ! -f /app/region_swapped_data_original.csv ]; then \
-    cp /app/region_swapped_data.csv /app/region_swapped_data_original.csv; \
+      cp /app/region_swapped_data.csv /app/region_swapped_data_original.csv; \
     fi
 
-# Generate initial GeoJSON files using Python generator
-RUN python3 geojson_generator.py && echo "Initial GeoJSON generated" || echo "GeoJSON generation skipped"
+# Pre-generate GeoJSON from CSV so the interactive map works on first load
+RUN python3 /app/geojson_generator.py && echo "[OK] Initial GeoJSON generated" \
+    || echo "[WARN] GeoJSON pre-generation skipped"
 
-# Expose the port Render uses
+# Render uses port 10000 for Docker services
 EXPOSE 10000
 
-# Start with gunicorn — 1 worker (free tier), 120s timeout for R map generation
-CMD ["gunicorn", "app:app", "--bind", "0.0.0.0:10000", "--workers", "1", "--timeout", "180", "--log-level", "info"]
+# Gunicorn: 1 worker (free tier limit), 180s timeout for R map generation
+CMD ["gunicorn", "app:app", \
+     "--bind", "0.0.0.0:10000", \
+     "--workers", "1", \
+     "--timeout", "180", \
+     "--log-level", "info", \
+     "--access-logfile", "-"]
