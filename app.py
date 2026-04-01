@@ -260,6 +260,8 @@ def generate() -> Any:
                 capture_output=True, text=True, timeout=5, check=False
             )
             r_available = r_check.returncode == 0
+            if r_available:
+                log_debug(f"R available: {r_check.stderr.strip()[:100]}")
         except Exception:
             r_available = False
 
@@ -273,15 +275,14 @@ def generate() -> Any:
                 r_result = subprocess.run(
                     ["Rscript", "generate_map_from_swaps.R"],
                     cwd=str(BASE_DIR),
-                    capture_output=True, text=True, check=False, timeout=120
+                    capture_output=True, text=True, check=False, timeout=180
                 )
                 log_debug(f"R script return code: {r_result.returncode}")
+                if r_result.stderr:
+                    log_debug(f"R stderr (last 500): {r_result.stderr[-500:]}")
 
-                district_png = OUTPUT_DIR / "bangladesh_districts_updated_from_swaps.png"
-                thana_png = OUTPUT_DIR / "bangladesh_thanas_updated_from_swaps.png"
-                outputs_exist = district_png.exists() and thana_png.exists()
-
-                if r_result.returncode == 0 or outputs_exist:
+                # ✅ Only treat as success if R actually completed successfully (returncode 0)
+                if r_result.returncode == 0:
                     map_message += "Maps regenerated with new assignments. "
                     log_debug("[OK] R map generation successful")
                     try:
@@ -289,36 +290,45 @@ def generate() -> Any:
                         for script_name in ["add_logo_to_pdfs.py", "add_logo_to_pngs.py"]:
                             script = BASE_DIR / script_name
                             if script.exists():
-                                subprocess.run(
+                                logo_result = subprocess.run(
                                     [python_exe, str(script)],
                                     cwd=str(BASE_DIR), capture_output=True,
-                                    text=True, check=False, timeout=30
+                                    text=True, check=False, timeout=60
                                 )
+                                log_debug(f"[OK] {script_name} rc={logo_result.returncode}")
                         map_message += "Zaytoon branding applied."
-                        log_debug("[OK] Logo addition attempted")
+                        log_debug("[OK] Logo addition complete")
+                    except subprocess.TimeoutExpired:
+                        log_debug("[WARN] Logo addition timed out (60s)")
+                        map_message += "Branding timed out."
                     except Exception as e:
-                        log_debug(f"[WARN] Logo addition skipped: {e}")
+                        log_debug(f"[WARN] Logo addition error: {e}")
+                    # Regenerate GeoJSON via R after successful map generation
                     try:
                         subprocess.run(
                             ["Rscript", "generate_geojson.R"],
                             cwd=str(BASE_DIR), capture_output=True,
-                            text=True, check=False, timeout=30
+                            text=True, check=False, timeout=60
                         )
+                        log_debug("[OK] R GeoJSON regenerated")
                     except Exception:
                         pass
                 else:
-                    map_message += "Note: Map image regeneration failed (R packages may be missing). Data is saved."
-                    log_debug(f"[WARN] R map generation failed: {r_result.stderr[:300]}")
+                    # R failed — log the error clearly
+                    err_snippet = (r_result.stderr or r_result.stdout or "no output")[-400:]
+                    log_debug(f"[WARN] R map generation FAILED (rc={r_result.returncode}): {err_snippet}")
+                    map_message += f"Map PDF regeneration failed (R error). Data is saved — interactive map updated."
 
             except subprocess.TimeoutExpired:
-                map_message += "Note: Map generation timed out. Data is saved."
-                log_debug("[WARN] R script timed out")
+                map_message += "Map generation timed out (180s). Data is saved."
+                log_debug("[WARN] R script timed out after 180s")
             except Exception as e:
-                map_message += f"Note: Map generation error: {str(e)}"
+                map_message += f"Map generation error: {str(e)}"
                 log_debug(f"[WARN] R execution error: {e}")
         else:
-            map_message += "Note: Map image generation requires R (not available here). District/thana assignments saved."
+            map_message += "Map PDF generation requires R (not available in this environment). District/thana assignments saved — interactive map updated."
             log_debug("[WARN] R not available, skipping map generation")
+
 
         log_debug(f"Generate complete. Message: {map_message}")
         log_debug("=" * 70)

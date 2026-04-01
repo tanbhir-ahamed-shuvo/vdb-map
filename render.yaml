@@ -1,13 +1,12 @@
 services:
   - type: web
     name: vdb-map-bangladesh
-    env: python
+    env: docker
     region: singapore
     plan: free
-    buildCommand: "bash build.sh"
-    startCommand: "gunicorn app:app --bind 0.0.0.0:$PORT --workers 1 --timeout 120"
+    dockerfilePath: ./Dockerfile
     envVars:
-      - key: PYTHON_VERSION
-        value: 3.11.0
       - key: SECRET_KEY
         generateValue: true
+      - key: PORT
+        value: 10000
