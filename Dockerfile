@@ -18,17 +18,26 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Install remaining R packages not bundled in rocker/geospatial
-# tmap v3 is available via CRAN; bangladesh is a custom Bangladesh geodata package
+# IMPORTANT: Pin tmap to v3 — our R script uses tmap v3 API
+# (tmap v4 has breaking changes: col->fill, component.autoscale removed, etc.)
 RUN Rscript -e "\
   options(repos = c(CRAN = 'https://cloud.r-project.org/')); \
-  pkgs_needed <- c('tmap', 'jsonlite', 'bangladesh'); \
-  installed   <- rownames(installed.packages()); \
+  installed <- rownames(installed.packages()); \
+  \
+  # Downgrade tmap to v3 if v4 is present (rocker/geospatial ships v4) \
+  tmap_ver <- if ('tmap' %in% installed) as.character(packageVersion('tmap')) else '0'; \
+  if (startsWith(tmap_ver, '4') || tmap_ver == '0') { \
+    cat('Installing tmap v3...\\n'); \
+    if (!requireNamespace('remotes', quietly=TRUE)) install.packages('remotes'); \
+    remotes::install_version('tmap', version='3.3-4', repos='https://cloud.r-project.org/', upgrade='never'); \
+  } else { cat('tmap v3 already present:', tmap_ver, '\\n'); } \
+  \
+  # Install missing packages \
+  pkgs_needed <- c('jsonlite', 'bangladesh'); \
   to_install  <- pkgs_needed[!pkgs_needed %in% installed]; \
   if (length(to_install) > 0) { \
-    cat('Installing:', paste(to_install, collapse=', '), '\n'); \
+    cat('Installing:', paste(to_install, collapse=', '), '\\n'); \
     install.packages(to_install, dependencies = TRUE, quiet = FALSE); \
-  } else { \
-    cat('All R packages already present\n'); \
   } \
 "
 
