@@ -128,6 +128,7 @@ def add_logo_with_imagemagick(logo_path, pdf_path, output_path):
 
 def main():
     outputs_dir = Path("outputs")
+    districts_dir = outputs_dir / "districts"
     logo_path = Path("zaytoon-logo.png")
     
     print("=" * 60)
@@ -159,14 +160,19 @@ def main():
         print("  3. GhostScript: choco install ghostscript")
         return
     
+    # Collect all PDFs from outputs and districts subdirectory
     pdfs = sorted(outputs_dir.glob("*.pdf"))
-    print(f"\nFound {len(pdfs)} PDF files")
+    if districts_dir.exists():
+        district_pdfs = sorted(districts_dir.glob("*.pdf"))
+        pdfs.extend(district_pdfs)
+    
+    print(f"\nFound {len(pdfs)} PDF files ({len(list(outputs_dir.glob('*.pdf')))} main + {len(list(districts_dir.glob('*.pdf'))) if districts_dir.exists() else 0} districts)")
     
     if HAS_PYPDF:
         print("\nAdding logo to PDFs using PyPDF...")
         for pdf_path in pdfs:
             output_path = pdf_path.parent / f"{pdf_path.stem}_temp_logo.pdf"
-            print(f"  {pdf_path.name}...", end=" ")
+            print(f"  {pdf_path.relative_to(outputs_dir.parent)}...", end=" ")
             if add_logo_with_pypdf(logo_path, pdf_path, output_path):
                 # Replace original with logo version
                 output_path.replace(pdf_path)
@@ -180,7 +186,7 @@ def main():
         print("\nAdding logo to PDFs using ImageMagick...")
         for pdf_path in pdfs:
             output_path = pdf_path.parent / f"{pdf_path.stem}_temp_logo.pdf"
-            print(f"  {pdf_path.name}...", end=" ")
+            print(f"  {pdf_path.relative_to(outputs_dir.parent)}...", end=" ")
             if add_logo_with_imagemagick(logo_path, pdf_path, output_path):
                 # Replace original with logo version
                 output_path.replace(pdf_path)

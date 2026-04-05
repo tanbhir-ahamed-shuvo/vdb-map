@@ -25,6 +25,12 @@ VDB MAP 2.1 is an **interactive web-based application** for managing and visuali
   - Rangpur (Purple)
   - Sylhet (Gold)
 
+- **64 District Maps** - Individual PDF maps for each district:
+  - Shows all thanas within each district
+  - Region color-coded for easy reference
+  - Updates automatically when thanas are moved
+  - Accessible via dedicated district viewer interface
+
 - **Full Bangladesh Maps**
   - District-level map with all 64 districts
   - Thana-level map with all 544 thanas
@@ -46,8 +52,10 @@ VDB MAP 2.1 is an **interactive web-based application** for managing and visuali
 
 - **PDF Viewer with Navigation**
   - Region-wise map navigation (Prev/Next buttons)
+  - District-wise map viewer with search functionality (64 district maps)
   - Full-screen view capability
   - Page-by-page display
+  - Keyboard navigation support
 
 ---
 
@@ -58,6 +66,7 @@ VDB_MAP2.1/
 ├── app.py                                    # Flask web server
 ├── generate_map_from_swaps.R                 # R script for map generation
 ├── region-manager-interactive.html           # Main web interface
+├── district-viewer.html                      # District maps viewer interface (64 districts)
 ├── region_swapped_data.csv                   # Current region/district/thana assignments
 ├── region_swapped_data_original.csv          # Original backup for reset functionality
 ├── zaytoon-logo.png                          # Logo embedded in all PDFs/PNGs
@@ -77,7 +86,9 @@ VDB_MAP2.1/
 │   ├── bangladesh_thanas_updated_from_swaps.pdf
 │   ├── bangladesh_thanas_updated_from_swaps.png
 │   ├── region_*.pdf                         # 10 region maps
-│   └── region_colors.csv                    # Color reference
+│   ├── region_colors.csv                    # Color reference
+│   └── districts/                            # Individual district maps (NEW)
+│       └── district_*.pdf                    # 64 district maps
 ├── __pycache__/                              # Python cache
 └── README.md                                 # This file
 ```
@@ -168,6 +179,18 @@ Click **"Reset to Original"** to:
 3. Use Prev/Next buttons to navigate regions
 4. Click "Full View" to open in new tab
 
+### **View Individual District Maps (NEW)**
+
+1. Click **"📍 View 64 District Maps"** button in the main interface
+2. Opens dedicated district viewer at `/districts`
+3. Features:
+   - **Search**: Type district name to filter
+   - **Grid View**: Click any district to view its map
+   - **Navigation**: Use Prev/Next buttons or arrow keys
+   - **Download**: Download individual district PDFs
+   - Shows all thanas within each district with region color-coding
+4. Updates automatically when thanas are moved between districts
+
 ### **Download Maps**
 
 - **PNG Downloads**: Districts or Thanas
@@ -187,6 +210,9 @@ Click **"Reset to Original"** to:
 | bangladesh_thanas_updated_from_swaps.png | Thana map | 5400×3800 px @ 300 DPI |
 | bangladesh_thanas_updated_from_swaps.pdf | Thana map PDF | 50×36" @ 600 DPI |
 | region_*.pdf | Individual region maps (10 files) | 14×10" @ 300 DPI |
+| districts/district_*.pdf | Individual district maps (64 files) | 11×8.5" @ 300 DPI |
+
+**Total Output:** 78 map files (2 full Bangladesh + 10 regions + 64 districts + 2 master PNG files)
 
 ### **Color Coding**
 
