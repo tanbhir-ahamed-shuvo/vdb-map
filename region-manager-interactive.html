@@ -1122,20 +1122,28 @@ Sylhet	Sylhet	Zakiganj`;
                 return r.json();
             })
             .then(result => {
-                if (!silent) showModal(false);
                 generateAbortController = null;
                 if (result.success) {
-                    refreshMaps();
-                    showNotif('✅ ' + (result.message || 'Maps updated successfully!'));
-                    reloadCsvData();
-                    // Signal interactive map to reload GeoJSON
-                    try {
-                        localStorage.setItem('geojsonUpdated', JSON.stringify({timestamp: Date.now()}));
-                        const mapChannel = new BroadcastChannel('map-updates');
-                        mapChannel.postMessage({type: 'geojson-updated'});
-                        mapChannel.close();
-                    } catch (e) {}
+                    if (result.background) {
+                        if (!silent) {
+                            const statusEl = document.getElementById('modalStatusText');
+                            if (statusEl) statusEl.textContent = 'Maps generating... preparing region 1/10';
+                        }
+                        pollProgress(silent);
+                    } else {
+                        if (!silent) showModal(false);
+                        refreshMaps();
+                        showNotif('✅ ' + (result.message || 'Maps updated successfully!'));
+                        reloadCsvData();
+                        try {
+                            localStorage.setItem('geojsonUpdated', JSON.stringify({timestamp: Date.now()}));
+                            const mapChannel = new BroadcastChannel('map-updates');
+                            mapChannel.postMessage({type: 'geojson-updated'});
+                            mapChannel.close();
+                        } catch (e) {}
+                    }
                 } else {
+                    if (!silent) showModal(false);
                     const msg = result.message || 'Map generation failed';
                     showNotif('⚠️ ' + msg);
                     console.warn('Generate failed:', result);
@@ -1155,6 +1163,47 @@ Sylhet	Sylhet	Zakiganj`;
                     console.error('Generate error:', err);
                 }
             });
+        }
+
+        let pollInterval = null;
+        function pollProgress(silent) {
+            if (pollInterval) clearInterval(pollInterval);
+            
+            pollInterval = setInterval(async () => {
+                try {
+                    const res = await fetch('/progress?t=' + Date.now());
+                    if (!res.ok) return;
+                    const data = await res.json();
+                    
+                    if (data.status === 'done' || data.status === 'error' || data.status === 'idle') {
+                        clearInterval(pollInterval);
+                        pollInterval = null;
+                        
+                        if (!silent) showModal(false);
+                        
+                        if (data.status === 'done') {
+                            refreshMaps();
+                            showNotif('✅ Maps successfully generated in background!');
+                            reloadCsvData();
+                        } else if (data.status === 'error') {
+                            showNotif('⚠️ Background generation error: ' + (data.message || 'Unknown error.'));
+                        }
+                    } else if (data.status === 'generating') {
+                        if (!silent) {
+                            const statusEl = document.getElementById('modalStatusText');
+                            if (statusEl) {
+                                if (data.regions < data.total_regions) {
+                                    statusEl.textContent = `Generating Regions: ${data.regions}/${data.total_regions} PDFs created...`;
+                                } else {
+                                    statusEl.textContent = `Generating Districts: ${data.districts}/${data.total_districts} PDFs created...`;
+                                }
+                            }
+                        }
+                    }
+                } catch (e) {
+                    // Ignore transient network errors during polling
+                }
+            }, 2000);
         }
 
         function cancelGenerate() {
@@ -1249,6 +1298,16 @@ Sylhet	Sylhet	Zakiganj`;
                     
                     if (!data.success) {
                         throw new Error(data.message || 'Reset failed');
+                    }
+                    
+                    if (data.background) {
+                        const statusEl = document.getElementById('modalStatusText');
+                        if (statusEl) statusEl.textContent = 'Resetting maps in background...';
+                        
+                        // We do want to reload the CSV now since the file was immediately restored
+                        await reloadCsvData();
+                        pollProgress(false);
+                        return; // Let the polling handle the modal hide and map reload
                     }
                     
                     // Reload CSV from server to refresh UI
