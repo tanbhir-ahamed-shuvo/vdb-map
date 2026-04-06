@@ -1162,11 +1162,13 @@ Sylhet	Sylhet	Zakiganj`;
                             if (autoUpdateLabel) {
                                 autoUpdateLabel.innerHTML = '<span style="color:#ed8936; font-weight:bold;">Generating Maps <span style="display:inline-block; animation:spin 2s linear infinite;">⏳</span></span>';
                             }
-                            const genBtn = document.querySelector('button[onclick="generateNewMap(false)"]');
-                            if (genBtn) {
-                                genBtn.innerHTML = '⏳ Generating Maps...';
-                                genBtn.disabled = true;
-                            }
+                            
+                            // Change all Generate buttons to show generating status
+                            document.querySelectorAll('button[onclick="generateNewMap(false)"]').forEach(btn => {
+                                btn.innerHTML = '⏳ Generating...';
+                                btn.disabled = true;
+                                btn.style.opacity = '0.7';
+                            });
                         }
                         pollProgress(silent);
                     } else {
@@ -1286,6 +1288,14 @@ Sylhet	Sylhet	Zakiganj`;
         function scheduleGenerate() {
             if (!autoUpdate) return;
             if (pendingTimer) clearTimeout(pendingTimer);
+            
+            // Instantly disable buttons across the UI to show that a queued action is buffering
+            document.querySelectorAll('button[onclick="generateNewMap(false)"]').forEach(btn => {
+                btn.innerHTML = '⏱️ Queuing...';
+                btn.style.opacity = '0.7';
+                btn.style.pointerEvents = 'none';
+            });
+            
             // Silent background save without blocking UI modal
             pendingTimer = setTimeout(() => generateNewMap(true), 1500);
         }
@@ -1306,11 +1316,13 @@ Sylhet	Sylhet	Zakiganj`;
             const lastUpdate = document.getElementById('lastUpdate');
             if (lastUpdate) lastUpdate.textContent = new Date().toLocaleString();
             
-            const genBtn = document.querySelector('button[onclick="generateNewMap(false)"]');
-            if (genBtn) {
-                genBtn.innerHTML = '🔄 Generate Updated Map';
-                genBtn.disabled = false;
-            }
+            // Reset all Generate buttons back to normal
+            document.querySelectorAll('button[onclick="generateNewMap(false)"]').forEach(btn => {
+                btn.innerHTML = '🔄 Generate Updated Map';
+                btn.disabled = false;
+                btn.style.opacity = '1';
+                btn.style.pointerEvents = 'auto';
+            });
         }
 
         async function reloadCsvData() {
