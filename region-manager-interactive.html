@@ -1600,9 +1600,13 @@ Sylhet	Sylhet	Zakiganj`;
             }
 
             const toggle = document.getElementById('autoUpdateToggle');
-            toggle.addEventListener('change', (e) => {
-                autoUpdate = e.target.checked;
-            });
+            if (toggle) {
+                // IMPORTANT: Sync with browser's restored state (if user refreshed the page with box checked)
+                autoUpdate = toggle.checked;
+                toggle.addEventListener('change', (e) => {
+                    autoUpdate = e.target.checked;
+                });
+            }
 
             // Prevent default drag behavior on region headers
             document.addEventListener('dragover', e => e.preventDefault());
