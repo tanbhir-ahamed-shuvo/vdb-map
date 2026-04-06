@@ -305,6 +305,10 @@ map_districts_pdf <- tm_shape(district_map) +
 tmap_save(map_districts_pdf, "outputs/bangladesh_districts_updated_from_swaps.pdf", width = 10, height = 8)
 cat("✓ District PDF saved\n")
 
+# Free memory from global district map objects
+rm(map_districts, map_districts_pdf)
+invisible(gc())
+
 # Create high-resolution PDF map with all thana names labeled
 cat("\nCreating thana-level map with labels...\n")
 
@@ -375,6 +379,10 @@ cat("✓ Thana PDF saved (42×30\" @ 600 DPI)\n")
 
 tmap_save(map_thanas_labeled, "outputs/bangladesh_thanas_updated_from_swaps.png", width = 5400, height = 3800, dpi = 300)
 cat("✓ Thana PNG saved (5400×3800 px @ 300 DPI)\n")
+
+# Free memory from global thana map object
+rm(map_thanas_labeled, map_dhaka, map_other, district_dhaka, district_other)
+invisible(gc())
 
 # Create individual PDFs for each of the 10 regions
 cat("\n════════════════════════════════════════════════════════════════════════════════════\n")
@@ -492,6 +500,10 @@ for (region_name in region_list) {
              " (", sprintf("%3d", region_progress_pct), "%) ", region_name, " region map\n"))
   # Write progress to file for frontend polling
   write_progress(regions_generated, 0, "generating")
+  
+  # Crucial memory cleanup for the 512MB RAM limit on Render
+  rm(region_map, region_thanas, region_districts, district_dhaka_region, district_other_region, thanas_dhaka_region, thanas_other_region)
+  invisible(gc())
 }
 
 # Create individual PDFs for each of the 64 districts
@@ -573,6 +585,12 @@ for (district_name in district_list) {
   }, error = function(e) {
     cat(paste0("✗ Error saving ", district_name, ": ", e$message, "\n"))
   })
+
+  # Crucial memory cleanup for the 512MB RAM limit on Render
+  if(exists("district_single_map")) rm(district_single_map)
+  if(exists("current_district")) rm(current_district)
+  if(exists("district_thanas")) rm(district_thanas)
+  invisible(gc())
 }
 
 cat(paste0("\n✓ Generated ", length(district_list), " district maps in outputs/districts/\n"))

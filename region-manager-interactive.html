@@ -1167,13 +1167,27 @@ Sylhet	Sylhet	Zakiganj`;
         }
 
         let pollInterval = null;
+        let pollFailCount = 0;
+        
         function pollProgress(silent) {
             if (pollInterval) clearInterval(pollInterval);
+            pollFailCount = 0;
             
             pollInterval = setInterval(async () => {
                 try {
                     const res = await fetch('/progress?t=' + Date.now());
-                    if (!res.ok) return;
+                    
+                    if (!res.ok) {
+                        pollFailCount++;
+                        if (pollFailCount >= 3) {
+                            throw new Error(`Server returned ${res.status}. Map generation failed due to server crash (OOM).`);
+                        }
+                        return;
+                    }
+                    
+                    // Reset fail count on success
+                    pollFailCount = 0;
+                    
                     const data = await res.json();
                     
                     if (data.status === 'done' || data.status === 'error' || data.status === 'idle') {
@@ -1206,7 +1220,15 @@ Sylhet	Sylhet	Zakiganj`;
                         }
                     }
                 } catch (e) {
-                    // Ignore transient network errors during polling
+                    if (e.message && e.message.includes('Server returned')) {
+                        // Hard failure from multiple 502/503s
+                        clearInterval(pollInterval);
+                        pollInterval = null;
+                        if (!silent) showModal(false);
+                        showNotif('❌ ' + e.message);
+                    } else {
+                        // Ignore transient network errors during polling (network drops, etc)
+                    }
                 }
             }, 2000);
         }
