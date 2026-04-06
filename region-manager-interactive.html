@@ -1124,10 +1124,18 @@ Sylhet	Sylhet	Zakiganj`;
             .then(result => {
                 generateAbortController = null;
                 if (result.success) {
+                    // Instantly signal interactive map to reload GeoJSON for snappier UI!
+                    try {
+                        localStorage.setItem('geojsonUpdated', JSON.stringify({timestamp: Date.now()}));
+                        const mapChannel = new BroadcastChannel('map-updates');
+                        mapChannel.postMessage({type: 'geojson-updated'});
+                        mapChannel.close();
+                    } catch (e) {}
+
                     if (result.background) {
                         if (!silent) {
                             const statusEl = document.getElementById('modalStatusText');
-                            if (statusEl) statusEl.textContent = 'Maps generating... preparing region 1/10';
+                            if (statusEl) statusEl.textContent = result.message || 'Maps generating... preparing region 1/10';
                         }
                         pollProgress(silent);
                     } else {
@@ -1135,20 +1143,13 @@ Sylhet	Sylhet	Zakiganj`;
                         refreshMaps();
                         showNotif('✅ ' + (result.message || 'Maps updated successfully!'));
                         reloadCsvData();
-                        try {
-                            localStorage.setItem('geojsonUpdated', JSON.stringify({timestamp: Date.now()}));
-                            const mapChannel = new BroadcastChannel('map-updates');
-                            mapChannel.postMessage({type: 'geojson-updated'});
-                            mapChannel.close();
-                        } catch (e) {}
                     }
                 } else {
                     if (!silent) showModal(false);
                     const msg = result.message || 'Map generation failed';
                     showNotif('⚠️ ' + msg);
                     console.warn('Generate failed:', result);
-                }
-            })
+                }            })
             .catch(err => {
                 clearTimeout(timeoutId);
                 if (!silent) showModal(false);
@@ -1176,6 +1177,10 @@ Sylhet	Sylhet	Zakiganj`;
                     const data = await res.json();
                     
                     if (data.status === 'done' || data.status === 'error' || data.status === 'idle') {
+                        // If it's idle, wait it might just mean we haven't started yet. Only kill polling if done or error.
+                        // Or if idle happens after getting generating status a few times.
+                        if (data.status === 'idle') return; // Keep polling until it eventually hits generating or done
+
                         clearInterval(pollInterval);
                         pollInterval = null;
                         

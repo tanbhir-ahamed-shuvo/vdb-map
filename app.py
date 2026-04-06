@@ -34,6 +34,10 @@ PROGRESS_FILE = BASE_DIR / ".progress"
 # Global state for progress tracking
 current_progress = {"regions": 0, "districts": 0, "total_regions": 10, "total_districts": 64, "status": "idle"}
 
+# Background task concurrency locks
+map_generation_lock = threading.Lock()
+needs_regeneration = False
+
 # Set up logging
 def log_debug(message: str) -> None:
     """Log debug message to both console and file"""
@@ -265,15 +269,21 @@ def generate() -> Any:
             r_available = False
 
         if r_available:
-            log_debug("[OK] R is available, spawning background map generation thread")
-            
-            # Start background thread
-            thread = threading.Thread(target=background_map_generation)
-            thread.daemon = True
-            thread.start()
-            
-            map_message = "Data saved. Map generation started in background."
-            background_processing = True
+            global needs_regeneration
+            if map_generation_lock.locked():
+                log_debug("[WARN] Map generation already in progress. Queuing new changes.")
+                needs_regeneration = True
+                map_message = "Data saved. Re-generation queued in background."
+                background_processing = True
+            else:
+                log_debug("[OK] R is available, spawning background map generation thread")
+                # Start background thread
+                thread = threading.Thread(target=background_map_generation)
+                thread.daemon = True
+                thread.start()
+                
+                map_message = "Data saved. Map generation started in background."
+                background_processing = True
         else:
             map_message = "Map PDF generation requires R (not available). Assignments saved."
             background_processing = False
@@ -305,82 +315,100 @@ def generate() -> Any:
 
 def background_map_generation():
     """Run R script and branding in a background thread to prevent HTTP 502 timeouts"""
-    try:
-        log_debug("[BACKGROUND] Starting map generation thread")
-        progress_data = {"regions": 0, "districts": 0, "total_regions": 10, "total_districts": 64, "status": "generating"}
-        with open(PROGRESS_FILE, 'w', encoding='utf-8') as f:
-            json.dump(progress_data, f)
-
-        r_result = subprocess.run(
-            ["Rscript", "generate_map_from_swaps.R"],
-            cwd=str(BASE_DIR),
-            capture_output=True, text=True, check=False, timeout=300
-        )
-        log_debug(f"[BACKGROUND] R script return code: {r_result.returncode}")
-        
-        if r_result.returncode == 0:
-            log_debug("[BACKGROUND] R map generation successful")
+    global needs_regeneration
+    
+    # Block other threads from entering
+    with map_generation_lock:
+        while True:
+            # We reset the dirty flag at the beginning of the loop.
+            # If the frontend triggers a new save while we are looping,
+            # this flag will be flipped back to True by the web endpoint.
+            needs_regeneration = False
+            
             try:
-                python_exe = sys.executable
-                for script_name in ["add_logo_to_pdfs.py", "add_logo_to_pngs.py"]:
-                    script = BASE_DIR / script_name
-                    if script.exists():
-                        logo_result = subprocess.run(
-                            [python_exe, str(script)],
+                log_debug("[BACKGROUND] Starting map generation loop iteration")
+                progress_data = {"regions": 0, "districts": 0, "total_regions": 10, "total_districts": 64, "status": "generating"}
+                with open(PROGRESS_FILE, 'w', encoding='utf-8') as f:
+                    json.dump(progress_data, f)
+
+                r_result = subprocess.run(
+                    ["Rscript", "generate_map_from_swaps.R"],
+                    cwd=str(BASE_DIR),
+                    capture_output=True, text=True, check=False, timeout=300
+                )
+                log_debug(f"[BACKGROUND] R script return code: {r_result.returncode}")
+                
+                if r_result.returncode == 0:
+                    log_debug("[BACKGROUND] R map generation successful")
+                    try:
+                        python_exe = sys.executable
+                        for script_name in ["add_logo_to_pdfs.py", "add_logo_to_pngs.py"]:
+                            script = BASE_DIR / script_name
+                            if script.exists():
+                                logo_result = subprocess.run(
+                                    [python_exe, str(script)],
+                                    cwd=str(BASE_DIR), capture_output=True,
+                                    text=True, check=False, timeout=60
+                                )
+                                log_debug(f"[BACKGROUND] {script_name} rc={logo_result.returncode}")
+                        log_debug("[BACKGROUND] Logo addition complete")
+                    except Exception as e:
+                        log_debug(f"[BACKGROUND] Logo addition error: {e}")
+                    
+                    # Regenerate GeoJSON via R after successful map generation
+                    try:
+                        subprocess.run(
+                            ["Rscript", "generate_geojson.R"],
                             cwd=str(BASE_DIR), capture_output=True,
                             text=True, check=False, timeout=60
                         )
-                        log_debug(f"[BACKGROUND] {script_name} rc={logo_result.returncode}")
-                log_debug("[BACKGROUND] Logo addition complete")
-            except Exception as e:
-                log_debug(f"[BACKGROUND] Logo addition error: {e}")
-            
-            # Regenerate GeoJSON via R after successful map generation
-            try:
-                subprocess.run(
-                    ["Rscript", "generate_geojson.R"],
-                    cwd=str(BASE_DIR), capture_output=True,
-                    text=True, check=False, timeout=60
-                )
-                log_debug("[BACKGROUND] R GeoJSON regenerated")
-            except Exception:
-                pass
-            
-            # Update progress to done
-            progress_data["status"] = "done"
-            with open(PROGRESS_FILE, 'w', encoding='utf-8') as f:
-                json.dump(progress_data, f)
-        else:
-            err_snippet = (r_result.stderr or r_result.stdout or "no output")[-400:]
-            log_debug(f"[BACKGROUND] R map generation FAILED (rc={r_result.returncode}): {err_snippet}")
-            # Update progress to error
-            progress_data["status"] = "error"
-            progress_data["message"] = "R map generation failed."
-            with open(PROGRESS_FILE, 'w', encoding='utf-8') as f:
-                json.dump(progress_data, f)
+                        log_debug("[BACKGROUND] R GeoJSON regenerated")
+                    except Exception:
+                        pass
+                    
+                    # Update progress to done
+                    progress_data["status"] = "done"
+                    with open(PROGRESS_FILE, 'w', encoding='utf-8') as f:
+                        json.dump(progress_data, f)
+                else:
+                    err_snippet = (r_result.stderr or r_result.stdout or "no output")[-400:]
+                    log_debug(f"[BACKGROUND] R map generation FAILED (rc={r_result.returncode}): {err_snippet}")
+                    # Update progress to error
+                    progress_data["status"] = "error"
+                    progress_data["message"] = "R map generation failed."
+                    with open(PROGRESS_FILE, 'w', encoding='utf-8') as f:
+                        json.dump(progress_data, f)
 
-    except subprocess.TimeoutExpired:
-        log_debug("[BACKGROUND] R script timed out after 300s")
-        try:
-            with open(PROGRESS_FILE, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-            data["status"] = "error"
-            data["message"] = "Map generation timed out."
-            with open(PROGRESS_FILE, 'w', encoding='utf-8') as f:
-                json.dump(data, f)
-        except Exception:
-            pass
-    except Exception as e:
-        log_debug(f"[BACKGROUND] execution error: {e}")
-        try:
-            with open(PROGRESS_FILE, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-            data["status"] = "error"
-            data["message"] = str(e)
-            with open(PROGRESS_FILE, 'w', encoding='utf-8') as f:
-                json.dump(data, f)
-        except Exception:
-            pass
+            except subprocess.TimeoutExpired:
+                log_debug("[BACKGROUND] R script timed out after 300s")
+                try:
+                    with open(PROGRESS_FILE, 'r', encoding='utf-8') as f:
+                        data = json.load(f)
+                    data["status"] = "error"
+                    data["message"] = "Map generation timed out."
+                    with open(PROGRESS_FILE, 'w', encoding='utf-8') as f:
+                        json.dump(data, f)
+                except Exception:
+                    pass
+            except Exception as e:
+                log_debug(f"[BACKGROUND] execution error: {e}")
+                try:
+                    with open(PROGRESS_FILE, 'r', encoding='utf-8') as f:
+                        data = json.load(f)
+                    data["status"] = "error"
+                    data["message"] = str(e)
+                    with open(PROGRESS_FILE, 'w', encoding='utf-8') as f:
+                        json.dump(data, f)
+                except Exception:
+                    pass
+            
+            # If no new changes were requested while we were running, exit the loop and release the lock.
+            # Otherwise, run it again to pick up the newest CSV file!
+            if not needs_regeneration:
+                log_debug("[BACKGROUND] Queue empty. Exiting thread.")
+                break
+            else:
+                log_debug("[BACKGROUND] Queue dirty! Restarting map generation loop.")
 
 
 
@@ -505,20 +533,35 @@ def reset_to_original() -> Any:
             pass
 
         if r_available:
-            log_debug("[OK] R is available, spawning background map generation thread for reset")
-            thread = threading.Thread(target=background_map_generation)
-            thread.daemon = True
-            thread.start()
-            
-            return jsonify({
-                "success": True,
-                "message": "Maps are being reset to original state in the background",
-                "background": True,
-                "outputs": {
-                    "district_png": "/outputs/bangladesh_districts_updated_from_swaps.png",
-                    "thana_png": "/outputs/bangladesh_thanas_updated_from_swaps.png",
-                }
-            })
+            global needs_regeneration
+            if map_generation_lock.locked():
+                log_debug("[WARN] Map generation already in progress. Queuing background reset.")
+                needs_regeneration = True
+                
+                return jsonify({
+                    "success": True,
+                    "message": "Maps re-generation queued in the background.",
+                    "background": True,
+                    "outputs": {
+                        "district_png": "/outputs/bangladesh_districts_updated_from_swaps.png",
+                        "thana_png": "/outputs/bangladesh_thanas_updated_from_swaps.png",
+                    }
+                })
+            else:
+                log_debug("[OK] R is available, spawning background map generation thread for reset")
+                thread = threading.Thread(target=background_map_generation)
+                thread.daemon = True
+                thread.start()
+                
+                return jsonify({
+                    "success": True,
+                    "message": "Maps are being reset to original state in the background",
+                    "background": True,
+                    "outputs": {
+                        "district_png": "/outputs/bangladesh_districts_updated_from_swaps.png",
+                        "thana_png": "/outputs/bangladesh_thanas_updated_from_swaps.png",
+                    }
+                })
         else:
             return jsonify({
                 "success": True,
