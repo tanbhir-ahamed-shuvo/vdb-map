@@ -859,6 +859,26 @@ Sylhet	Sylhet	Zakiganj`;
                         header.classList.toggle('collapsed', isOpen);
                     };
 
+                    // Allow dropping districts directly onto the region header
+                    header.addEventListener('dragover', function(e) {
+                        e.preventDefault();
+                        if (dragData.type === 'district') {
+                            this.classList.add('drag-over');
+                        }
+                    });
+
+                    header.addEventListener('dragleave', function(e) {
+                        this.classList.remove('drag-over');
+                    });
+
+                    header.addEventListener('drop', function(e) {
+                        e.preventDefault();
+                        this.classList.remove('drag-over');
+                        if (dragData.type === 'district' && dragData.region !== regionName) {
+                            swapDistrict(dragData.region, dragData.district, regionName);
+                        }
+                    });
+
                     Object.entries(districts).forEach(([districtName, thanas]) => {
                         const districtBlock = document.createElement('div');
                         districtBlock.className = 'district-block';
@@ -1136,6 +1156,17 @@ Sylhet	Sylhet	Zakiganj`;
                         if (!silent) {
                             const statusEl = document.getElementById('modalStatusText');
                             if (statusEl) statusEl.textContent = result.message || 'Maps generating... preparing region 1/10';
+                        } else {
+                            // VISUAL FEEDBACK FOR SILENT "AUTO UPDATE" 
+                            const autoUpdateLabel = document.getElementById('lastUpdate');
+                            if (autoUpdateLabel) {
+                                autoUpdateLabel.innerHTML = '<span style="color:#ed8936; font-weight:bold;">Generating Maps <span style="display:inline-block; animation:spin 2s linear infinite;">⏳</span></span>';
+                            }
+                            const genBtn = document.querySelector('button[onclick="generateNewMap(false)"]');
+                            if (genBtn) {
+                                genBtn.innerHTML = '⏳ Generating Maps...';
+                                genBtn.disabled = true;
+                            }
                         }
                         pollProgress(silent);
                     } else {
@@ -1217,6 +1248,16 @@ Sylhet	Sylhet	Zakiganj`;
                                     statusEl.textContent = `Generating Districts: ${data.districts}/${data.total_districts} PDFs created...`;
                                 }
                             }
+                        } else {
+                            // Update the silent loading spinner text with actual progress
+                            const autoUpdateLabel = document.getElementById('lastUpdate');
+                            if (autoUpdateLabel && autoUpdateLabel.innerHTML.includes('Generating')) {
+                                if (data.regions < data.total_regions) {
+                                    autoUpdateLabel.innerHTML = `<span style="color:#ed8936; font-weight:bold;">Generating Regions: ${data.regions}/${data.total_regions} <span style="display:inline-block; animation:spin 2s linear infinite;">⏳</span></span>`;
+                                } else {
+                                    autoUpdateLabel.innerHTML = `<span style="color:#ed8936; font-weight:bold;">Generating Districts: ${data.districts}/${data.total_districts} <span style="display:inline-block; animation:spin 2s linear infinite;">⏳</span></span>`;
+                                }
+                            }
                         }
                     }
                 } catch (e) {
@@ -1264,6 +1305,12 @@ Sylhet	Sylhet	Zakiganj`;
 
             const lastUpdate = document.getElementById('lastUpdate');
             if (lastUpdate) lastUpdate.textContent = new Date().toLocaleString();
+            
+            const genBtn = document.querySelector('button[onclick="generateNewMap(false)"]');
+            if (genBtn) {
+                genBtn.innerHTML = '🔄 Generate Updated Map';
+                genBtn.disabled = false;
+            }
         }
 
         async function reloadCsvData() {
